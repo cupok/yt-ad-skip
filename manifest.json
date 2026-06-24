@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "YT Auto Timestamps",
+  "version": "1.0",
+  "description": "Triggers AI chat to load generate timestamps of the current video",
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
