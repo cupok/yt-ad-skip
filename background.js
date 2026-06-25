@@ -8,12 +8,16 @@ const LOG_FILE_NAME = 'yt-auto-timestamps.log';
 
 const MAX_LOG_LINES = 1000;
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
+const LOG_FLUSH_DELAY_MS = 500;
 
 /** @type {any} */
 const chromeApi = chrome;
 
 let writeQueue = Promise.resolve();
 let flushInProgress = false;
+let flushTimer = null;
+let pendingLogEntries = [];
+let pendingLogCallbacks = [];
 
 function storageGet(defaults) {
     return new Promise((resolve) => {
@@ -97,13 +101,17 @@ function trimLogLines(lines) {
     return output;
 }
 
-async function appendLog(entry) {
-    const line = formatLogLine(entry);
+async function appendLogEntries(entries) {
+    if (!entries.length) {
+        return;
+    }
+
+    const newLines = entries.map((entry) => formatLogLine(entry));
     const result = await storageGet({ [LOG_STORAGE_KEY]: [] });
     const existingLines = Array.isArray(result[LOG_STORAGE_KEY])
         ? result[LOG_STORAGE_KEY]
         : [];
-    const lines = trimLogLines([...existingLines, line]);
+    const lines = trimLogLines([...existingLines, ...newLines]);
 
     await storageSet({
         [LOG_STORAGE_KEY]: lines,
@@ -111,14 +119,54 @@ async function appendLog(entry) {
     });
 }
 
-function queueLog(entry) {
-    writeQueue = writeQueue
-        .then(() => appendLog(entry))
-        .catch((error) => {
-            console.warn('[yt-auto-timestamps:background] failed to write log', error);
-        });
+function scheduleLogFlush() {
+    if (flushTimer) {
+        return;
+    }
 
-    return writeQueue;
+    flushTimer = setTimeout(() => {
+        flushTimer = null;
+        void flushPendingLogs();
+    }, LOG_FLUSH_DELAY_MS);
+}
+
+async function flushPendingLogs() {
+    if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+    }
+
+    if (!pendingLogEntries.length) {
+        await writeQueue;
+        return;
+    }
+
+    const entries = pendingLogEntries;
+    const callbacks = pendingLogCallbacks;
+
+    pendingLogEntries = [];
+    pendingLogCallbacks = [];
+
+    const writePromise = writeQueue.then(() => appendLogEntries(entries));
+    writeQueue = writePromise.catch(() => undefined);
+
+    try {
+        await writePromise;
+        callbacks.forEach(({ resolve }) => resolve(undefined));
+    } catch (error) {
+        console.warn('[yt-auto-timestamps:background] failed to write log', error);
+        callbacks.forEach(({ reject }) => reject(error));
+    }
+}
+
+function queueLog(entry) {
+    const queued = new Promise((resolve, reject) => {
+        pendingLogEntries.push(entry);
+        pendingLogCallbacks.push({ resolve, reject });
+        scheduleLogFlush();
+    });
+
+    return queued;
 }
 
 async function flushLogFile() {
@@ -129,6 +177,8 @@ async function flushLogFile() {
     flushInProgress = true;
 
     try {
+        await flushPendingLogs();
+
         const result = await storageGet({
             [LOG_STORAGE_KEY]: [],
             [LOG_UPDATED_AT_KEY]: null,
@@ -146,7 +196,8 @@ async function flushLogFile() {
             ...lines,
             '',
         ].join('\n');
-        const url = `data:text/plain;charset=utf-8,${encodeURIComponent(body)}`;
+        // Avoid Chrome inferring a .txt extension from text/plain.
+        const url = `data:application/octet-stream;charset=utf-8,${encodeURIComponent(body)}`;
 
         await downloadFile({
             url,

@@ -25,11 +25,13 @@ const BUTTON_STYLE = {
 };
 
 // Debug
-const DEBUG = true;
+const DEBUG = false;
 const LOG_TO_FILE = true;
 const LOG_MESSAGE_TYPE = 'YT_AUTO_TIMESTAMPS_LOG';
 const LOG_CONSOLE_PREFIX = '[yt-auto-timestamps]';
 const LOG_THROTTLE_MS = 10000;
+const CHAT_OPEN_RETRY_DELAY = 2000;
+const CHAT_OPEN_MAX_ATTEMPTS = 3;
 
 /** @type {any} */
 const chromeApi = globalThis['chrome'];
@@ -74,16 +76,25 @@ function writeLog(level, message, details) {
 }
 
 function buildLogEntry(level, message, details) {
-    return {
+    const entry = {
         timestamp: new Date().toISOString(),
         sequence: ++logSequence,
         level,
         message: String(message),
         pageUrl: window.location.href,
         videoId: getPageVideoId(),
-        state: getLogState(),
         details: serializeLogDetails(details),
     };
+
+    if (shouldIncludeLogState(level)) {
+        entry.state = getLogState();
+    }
+
+    return entry;
+}
+
+function shouldIncludeLogState(level) {
+    return level === 'warn' || level === 'error';
 }
 
 function sendLogEntry(entry) {
@@ -307,31 +318,10 @@ function shouldLogThrottled(key, signature, interval = LOG_THROTTLE_MS) {
 
 // Selectors
 const chatSelector = '[data-target-id="youchat_messages_section"]';
-const chatPanelContainerSelector = [
-    'ytd-engagement-panel-section-list-renderer',
-    'ytd-live-chat-frame',
-].join(', ');
 const watchFlexySelector = 'ytd-watch-flexy';
 const watchFlexyFullscreenSelector = `${watchFlexySelector}[fullscreen]`;
 const chatOpenButtonSelector = 'ytd-watch-flexy[fullscreen] .you-chat-entrypoint-button button';
 const chatCloseButtonSelector = 'ytd-watch-flexy[fullscreen] #visibility-button button';
-const chatGlobalCloseButtonSelectors = [
-    chatCloseButtonSelector,
-    '#visibility-button button',
-];
-const chatCloseButtonSelectors = [
-    ...chatGlobalCloseButtonSelectors,
-    'button[aria-label*="close" i]',
-    'button[aria-label*="hide chat" i]',
-    'button[aria-label*="close chat" i]',
-    'button[title*="close" i]',
-    'yt-icon-button[aria-label*="close" i]',
-    'tp-yt-paper-icon-button[aria-label*="close" i]',
-];
-const chatToggleButtonSelectors = [
-    chatOpenButtonSelector,
-    '.you-chat-entrypoint-button button',
-];
 const chatTextareaSelector = '.chatInputViewModelChatInputForm .chatInputViewModelChatInput';
 const chatTimestampItemSelector = '.ytwMarkdownDivTimestamp';
 
@@ -352,6 +342,7 @@ let segments = [];
 
 let openChatTimer = null;
 let closeTimer = null;
+let chatOpenAttemptCount = 0;
 
 let answerObserver = null;
 let answerStableTimer = null;
@@ -531,7 +522,7 @@ function collectExistingSponsorLines() {
     const chat = document.querySelector(chatSelector);
 
     if (!chat) {
-        logWarn('collectExistingSponsorLines skipped because chat is missing', {
+        log('collectExistingSponsorLines skipped because chat is missing', {
             selector: chatSelector,
         });
         return lines;
@@ -605,25 +596,6 @@ function isVisibleElement(element) {
 /**
  * @returns {Array<Document|Element>}
  */
-function getChatPanelSearchRoots() {
-    const roots = [];
-    const chat = document.querySelector(chatSelector);
-    const chatPanel = chat?.closest(chatPanelContainerSelector);
-
-    if (chatPanel) {
-        roots.push(chatPanel);
-    }
-
-    if (chat) {
-        roots.push(chat);
-    }
-
-    return [...new Set(roots)];
-}
-
-/**
- * @returns {Array<Document|Element>}
- */
 function getChatGlobalSearchRoots() {
     const roots = [];
 
@@ -690,11 +662,17 @@ function closeChat(localRunId, reason) {
         return false;
     }
 
-    const panelRoots = getChatPanelSearchRoots();
+    if (!document.fullscreenElement) {
+        log('chat close skipped because fullscreen is inactive', {
+            localRunId,
+            reason,
+            chat: getChatSnapshot(),
+        });
+        return false;
+    }
+
     const globalRoots = getChatGlobalSearchRoots();
-    const closeButton =
-        findClickableElement(chatCloseButtonSelectors, panelRoots) ||
-        findClickableElement(chatGlobalCloseButtonSelectors, globalRoots);
+    const closeButton = findClickableElement([chatCloseButtonSelector], globalRoots);
 
     if (closeButton) {
         log('clicking chat close button', {
@@ -707,30 +685,9 @@ function closeChat(localRunId, reason) {
         return true;
     }
 
-    const toggleButton = findClickableElement(chatToggleButtonSelectors, globalRoots);
-
-    if (toggleButton) {
-        logWarn('chat close button not found; clicking chat toggle button', {
-            reason,
-            closeSelectors: chatCloseButtonSelectors,
-            globalCloseSelectors: chatGlobalCloseButtonSelectors,
-            toggleSelector: toggleButton.selector,
-            root: toggleButton.root,
-            button: describeElement(toggleButton.element),
-            chat: getChatSnapshot(),
-        });
-        toggleButton.element.click();
-        return true;
-    }
-
-    logWarn('no chat close or toggle button found', {
+    logWarn('chat close button not found', {
         reason,
-        closeSelectors: chatCloseButtonSelectors,
-        globalCloseSelectors: chatGlobalCloseButtonSelectors,
-        toggleSelectors: chatToggleButtonSelectors,
-        panelRoots: panelRoots.map((root) => {
-            return describeElement(root instanceof Element ? root : document.documentElement);
-        }),
+        closeSelector: chatCloseButtonSelector,
         globalRoots: globalRoots.map((root) => {
             return describeElement(root instanceof Element ? root : document.documentElement);
         }),
@@ -857,7 +814,14 @@ function bindPlayerEvents(player) {
                     `${event.type}:${startBlockReasons.join('|')}`
                 )
             ) {
-                logWarn('start gate blocked from player event', {
+                const logStartGateBlocked = (
+                    startBlockReasons.length === 1 &&
+                    startBlockReasons[0] === 'not-fullscreen'
+                )
+                    ? log
+                    : logWarn;
+
+                logStartGateBlocked('start gate blocked from player event', {
                     ...getStartGateSnapshot(video, event.type),
                     reasons: startBlockReasons,
                 });
@@ -875,7 +839,7 @@ function bindPlayerEvents(player) {
                 shouldLogThrottled('skip-update-no-segments', event.type)
             )
         ) {
-            logWarn('skip button update skipped because no segments are available', {
+            log('skip button update skipped because no segments are available', {
                 eventType: event.type,
                 video: describeVideo(video),
             });
@@ -893,17 +857,21 @@ function bindPlayerEvents(player) {
 }
 
 // Chat flow
-function timestamps() {
+function timestamps(delay = CHAT_OPEN_DELAY) {
     const localRunId = runId;
 
     log('timestamps flow scheduled', {
         localRunId,
-        delay: CHAT_OPEN_DELAY,
+        delay,
+        nextAttempt: chatOpenAttemptCount + 1,
+        maxAttempts: CHAT_OPEN_MAX_ATTEMPTS,
     });
 
     clearTimeout(openChatTimer);
 
     openChatTimer = setTimeout(() => {
+        openChatTimer = null;
+
         if (!isCurrentRun(localRunId)) {
             logWarn('timestamps flow aborted because run is stale', {
                 localRunId,
@@ -912,24 +880,51 @@ function timestamps() {
             return;
         }
 
+        if (!document.fullscreenElement) {
+            started = false;
+            chatOpenAttemptCount = 0;
+
+            log('timestamps flow aborted because fullscreen is inactive', {
+                localRunId,
+                currentRunId: runId,
+                video: describeVideo(activePlayer),
+            });
+            return;
+        }
+
         log('timestamps flow started', { localRunId });
 
         // Save old sponsor lines before opening/sending.
         // This reduces the chance of parsing a previous answer.
-        ignoredSponsorLines = collectExistingSponsorLines();
+        ignoredSponsorLines = document.querySelector(chatSelector)
+            ? collectExistingSponsorLines()
+            : new Set();
 
+        chatOpenAttemptCount++;
         const chatOpenButton = document.querySelector(chatOpenButtonSelector);
 
         if (!(chatOpenButton instanceof HTMLElement)) {
+            const shouldRetry = chatOpenAttemptCount < CHAT_OPEN_MAX_ATTEMPTS;
+
             logWarn('chat open button not found', {
                 selector: chatOpenButtonSelector,
+                attempt: chatOpenAttemptCount,
+                maxAttempts: CHAT_OPEN_MAX_ATTEMPTS,
+                willRetry: shouldRetry,
+                retryDelay: shouldRetry ? CHAT_OPEN_RETRY_DELAY : null,
                 fullscreenElement: describeElement(document.fullscreenElement),
                 matchingWatchFlexyCount: document.querySelectorAll(watchFlexySelector).length,
                 fullscreenWatchFlexyCount: document.querySelectorAll(watchFlexyFullscreenSelector).length,
             });
-            started = false;
+
+            if (shouldRetry) {
+                timestamps(CHAT_OPEN_RETRY_DELAY);
+            }
+
             return;
         }
+
+        chatOpenAttemptCount = 0;
 
         log('clicking chat open button', {
             button: describeElement(chatOpenButton),
@@ -939,7 +934,7 @@ function timestamps() {
         void sendPrompt(localRunId).catch((error) => {
             logError('send prompt failed', error);
         });
-    }, CHAT_OPEN_DELAY);
+    }, delay);
 }
 
 async function sendPrompt(localRunId) {
@@ -968,7 +963,6 @@ async function sendPrompt(localRunId) {
             selector: chatTextareaSelector,
             localRunId,
         });
-        started = false;
         return;
     }
 
@@ -1507,6 +1501,7 @@ function reset() {
     started = false;
     segments = [];
     lastSkipButtonSegmentKey = null;
+    chatOpenAttemptCount = 0;
     ignoredSponsorLines = new Set();
 
     clearTimers();
@@ -1538,6 +1533,7 @@ function start(video) {
     started = true;
     currentVideoSrc = getVideoSrc(video);
     activePlayer = video;
+    chatOpenAttemptCount = 0;
 
     log('start completed; launching timestamps flow', {
         video: describeVideo(video),
@@ -1593,7 +1589,7 @@ function bindFullscreenChange() {
             });
             updateSkipButton(video);
         } else {
-            logWarn('fullscreenchange did not update skip button because no segments are available');
+            log('fullscreenchange did not update skip button because no segments are available');
         }
     });
 }
@@ -1684,6 +1680,10 @@ function bindGlobalErrorLogging() {
     globalErrorLoggingBound = true;
 
     window.addEventListener('error', (event) => {
+        if (isIgnoredWindowError(event.message)) {
+            return;
+        }
+
         logError('window error captured', {
             message: event.message,
             filename: event.filename,
@@ -1700,6 +1700,13 @@ function bindGlobalErrorLogging() {
     });
 
     log('global error logging bound');
+}
+
+function isIgnoredWindowError(message) {
+    return (
+        message === 'ResizeObserver loop completed with undelivered notifications.' ||
+        message === 'ResizeObserver loop limit exceeded'
+    );
 }
 
 function init() {
