@@ -3,6 +3,13 @@
   "name": "YT Auto Timestamps",
   "version": "1.0",
   "description": "Triggers AI chat to load generate timestamps of the current video",
+  "permissions": ["downloads", "storage"],
+  "action": {
+    "default_title": "Export YT Auto Timestamps logs"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],
