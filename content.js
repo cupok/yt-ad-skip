@@ -4,7 +4,7 @@ const FILL_GROWS = true; // skip button animation style
 const FILL_COLOR = 'rgba(60,140,255,0.85)'; // played portion
 const TRACK_COLOR = 'rgba(0,0,0,0.8)'; // remaining portion
 const CLOSE_DELAY = 10000; // chat panel closing delay
-
+const AUTO_SKIP_DELAY = 5000; // ms; set above 0 to autoskip sponsor segments after this delay
 const CHAT_OPEN_DELAY = 1000;
 const CHAT_TEXTAREA_TIMEOUT = 10000;
 const ANSWER_TIMEOUT = 30000;
@@ -145,7 +145,13 @@ function getLogState() {
                 answerObserver: Boolean(answerObserver),
                 answerStable: Boolean(answerStableTimer),
                 answerTimeout: Boolean(answerTimeout),
+                autoSkip: Boolean(autoSkipTimer),
                 videoObserver: Boolean(videoObserver),
+            },
+            autoSkip: {
+                enabled: AUTO_SKIP_DELAY > 0,
+                delay: AUTO_SKIP_DELAY,
+                segmentKey: autoSkipSegmentKey,
             },
             fullscreen: {
                 active: Boolean(document.fullscreenElement),
@@ -339,6 +345,8 @@ let started = false;
 let skipButton = null;
 let lastSkipButtonSegmentKey = null;
 let segments = [];
+let autoSkipTimer = null;
+let autoSkipSegmentKey = null;
 
 let openChatTimer = null;
 let closeTimer = null;
@@ -471,6 +479,7 @@ function clearTimers() {
         answerObserver: Boolean(answerObserver),
         answerStable: Boolean(answerStableTimer),
         answerTimeout: Boolean(answerTimeout),
+        autoSkip: Boolean(autoSkipTimer),
     };
 
     if (Object.values(hadTimers).some(Boolean)) {
@@ -486,6 +495,8 @@ function clearTimers() {
         clearTimeout(closeTimer);
         closeTimer = null;
     }
+
+    cancelAutoSkip('clear-timers');
 
     clearAnswerWatcher();
 }
@@ -549,7 +560,7 @@ function normalizeText(text) {
 }
 
 function isSponsorLine(text) {
-    return /^\s*-?\s*sponsor(?:\s+segment)?\s*:/i.test(text);
+    return /\bsponsor(?:\s+segment)?\b/i.test(text);
 }
 
 function getChatSnapshot(chat = document.querySelector(chatSelector)) {
@@ -703,8 +714,137 @@ function findCurrentSegment(video) {
     }
 
     return segments.find((item) => {
-        return video.currentTime >= item.start && video.currentTime < item.end;
+        return video.currentTime >= item.start && video.currentTime < getSegmentEnd(item, video);
     }) || null;
+}
+
+function getSegmentEnd(segment, video) {
+    if (
+        video instanceof HTMLMediaElement &&
+        Number.isFinite(video.duration)
+    ) {
+        return Math.min(segment.end, video.duration);
+    }
+
+    return segment.end;
+}
+
+function cancelAutoSkip(reason, details = {}) {
+    const hadAutoSkip = Boolean(autoSkipTimer || autoSkipSegmentKey);
+
+    if (autoSkipTimer) {
+        clearTimeout(autoSkipTimer);
+        autoSkipTimer = null;
+    }
+
+    const segmentKey = autoSkipSegmentKey;
+    autoSkipSegmentKey = null;
+
+    if (hadAutoSkip) {
+        log('autoskip canceled', {
+            reason,
+            segmentKey,
+            ...details,
+        });
+    }
+}
+
+function scheduleAutoSkip(video, segment, segmentKey) {
+    if (!Number.isFinite(AUTO_SKIP_DELAY) || AUTO_SKIP_DELAY <= 0) {
+        return;
+    }
+
+    if (autoSkipSegmentKey === segmentKey) {
+        return;
+    }
+
+    if (autoSkipSegmentKey) {
+        cancelAutoSkip('segment-changed', {
+            nextSegmentKey: segmentKey,
+        });
+    }
+
+    const localRunId = runId;
+
+    autoSkipSegmentKey = segmentKey;
+
+    log('autoskip scheduled', {
+        localRunId,
+        segment,
+        segmentKey,
+        delay: AUTO_SKIP_DELAY,
+        currentTime: video.currentTime,
+    });
+
+    autoSkipTimer = setTimeout(() => {
+        autoSkipTimer = null;
+
+        const currentSegment = findCurrentSegment(video);
+        const currentSegmentKey = currentSegment
+            ? `${currentSegment.start}-${currentSegment.end}`
+            : null;
+
+        if (!isCurrentRun(localRunId)) {
+            autoSkipSegmentKey = null;
+            logWarn('autoskip aborted because run is stale', {
+                localRunId,
+                currentRunId: runId,
+                segment,
+                segmentKey,
+            });
+            return;
+        }
+
+        if (!(video instanceof HTMLMediaElement) || !video.isConnected) {
+            autoSkipSegmentKey = null;
+            logWarn('autoskip aborted because video is unavailable', {
+                localRunId,
+                segment,
+                segmentKey,
+                video: describeVideo(video),
+            });
+            return;
+        }
+
+        if (currentSegmentKey !== segmentKey) {
+            autoSkipSegmentKey = null;
+            log('autoskip skipped because segment is no longer active', {
+                localRunId,
+                segment,
+                segmentKey,
+                currentSegment,
+                currentSegmentKey,
+                currentTime: video.currentTime,
+            });
+            return;
+        }
+
+        const segmentEnd = getSegmentEnd(segment, video);
+
+        log('autoskip seeking to segment end', {
+            localRunId,
+            segment,
+            segmentKey,
+            segmentEnd,
+            currentTimeBefore: video.currentTime,
+        });
+
+        autoSkipSegmentKey = null;
+        video.currentTime = segmentEnd;
+
+        if (skipButton) {
+            skipButton.style.display = 'none';
+        }
+
+        lastSkipButtonSegmentKey = null;
+
+        log('autoskip completed seek', {
+            localRunId,
+            segment,
+            segmentKey,
+            currentTimeAfter: video.currentTime,
+        });
+    }, AUTO_SKIP_DELAY);
 }
 
 function getStartBlockReasons(video) {
@@ -791,6 +931,10 @@ function bindPlayerEvents(player) {
             videoSrc &&
             videoSrc !== currentVideoSrc
         ) {
+            cancelAutoSkip('video-src-changed', {
+                previousSrc: currentVideoSrc,
+                nextSrc: videoSrc,
+            });
             logWarn('player emptied with a different video src; resetting', {
                 previousSrc: currentVideoSrc,
                 nextSrc: videoSrc,
@@ -1330,11 +1474,16 @@ function updateSkipButton(video) {
             skipButton.style.display = 'none';
         }
 
+        cancelAutoSkip('left-segment', {
+            currentTime: video.currentTime,
+            video: describeVideo(video),
+        });
         lastSkipButtonSegmentKey = null;
         return;
     }
 
     const segmentKey = `${segment.start}-${segment.end}`;
+    scheduleAutoSkip(video, segment, segmentKey);
 
     if (!skipButton) {
         const videoContainer = document.querySelector('#player-container');
@@ -1365,13 +1514,14 @@ function updateSkipButton(video) {
         });
     }
 
-    let progress = (video.currentTime - segment.start) / (segment.end - segment.start);
+    const segmentEnd = getSegmentEnd(segment, video);
+    let progress = (video.currentTime - segment.start) / (segmentEnd - segment.start);
     progress = Math.min(1, Math.max(0, progress));
 
     const percent = (FILL_GROWS ? progress : 1 - progress) * 100;
 
     skipButton.style.background = `linear-gradient(to right, ${FILL_COLOR} ${percent}%, ${TRACK_COLOR} ${percent}%)`;
-    skipButton.textContent = `Skip segment → ${format(segment.end)}`;
+    skipButton.textContent = `Skip segment → ${format(segmentEnd)}`;
 
     const previousDisplay = skipButton.style.display;
     skipButton.style.display = 'block';
@@ -1393,15 +1543,23 @@ function updateSkipButton(video) {
     skipButton.onclick = () => {
         log('skip button clicked', {
             segment,
+            segmentEnd,
             currentTimeBefore: video.currentTime,
         });
 
-        video.currentTime = segment.end;
+        cancelAutoSkip('manual-skip-button', {
+            segment,
+            segmentKey,
+            currentTime: video.currentTime,
+        });
+
+        video.currentTime = segmentEnd;
         skipButton.style.display = 'none';
         lastSkipButtonSegmentKey = null;
 
         log('skip button completed seek', {
             segment,
+            segmentEnd,
             currentTimeAfter: video.currentTime,
         });
     };
@@ -1467,12 +1625,21 @@ function bindShortcuts() {
         event.preventDefault();
         event.stopPropagation();
 
+        const segmentEnd = getSegmentEnd(segment, video);
+
         log('skip shortcut seeking to segment end', {
             segment,
+            segmentEnd,
             currentTimeBefore: video.currentTime,
         });
 
-        video.currentTime = segment.end;
+        cancelAutoSkip('skip-shortcut', {
+            segment,
+            segmentKey: `${segment.start}-${segment.end}`,
+            currentTime: video.currentTime,
+        });
+
+        video.currentTime = segmentEnd;
 
         if (skipButton) {
             skipButton.style.display = 'none';
@@ -1482,6 +1649,7 @@ function bindShortcuts() {
 
         log('skip shortcut completed seek', {
             segment,
+            segmentEnd,
             currentTimeAfter: video.currentTime,
         });
     }, true);
