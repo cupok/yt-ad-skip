@@ -22,6 +22,13 @@
                     <summary data-i18n="advanced">Advanced timing</summary>
                     <div id="advanced-fields" class="fields"></div>
                 </details>
+                <div class="field debug-setting">
+                    <div>
+                        <label for="debug" data-i18n="debug">Debug logging</label>
+                        <p id="debug-hint" data-i18n="debugHint">Show diagnostic messages in the browser console.</p>
+                    </div>
+                    <input type="checkbox" id="debug" name="debug" role="switch" aria-describedby="debug-hint">
+                </div>
                 <div class="actions">
                     <button type="submit" class="primary" data-i18n="save">Save settings</button>
                     <button type="button" id="reset" data-i18n="reset">Reset defaults</button>

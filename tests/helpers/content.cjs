@@ -58,7 +58,6 @@ function loadContent({ pageLanguage = '', languages = [], language = '', debug =
     vm.runInContext(settingsSource, context, { filename: path.join(root, 'settings.js') });
     vm.runInContext(source
         // Keep offsets identical across flag variants for V8 coverage merging.
-        .replace('const DEBUG = true;', `const DEBUG = ${String(debug).padEnd(5)};`)
         .replace('const LOG_TO_FILE = true;', `const LOG_TO_FILE = ${String(logToFile).padEnd(5)};`)
         .replace('const FILL_GROWS = true;', `const FILL_GROWS = ${String(fillGrows).padEnd(5)};`)
         .replace(init, `
@@ -79,6 +78,7 @@ globalThis.extension = {
     ignoreExistingLines() { ignoredSponsorLines = collectExistingSponsorLines(); },
 };
 })();`), context, { filename: path.join(root, 'content.js') });
+    context.extension.settings.debug = debug;
 
     function setChat(lines) {
         const nodes = lines.map(({ text, times = [] }) => {

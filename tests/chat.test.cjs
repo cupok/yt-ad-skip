@@ -125,8 +125,10 @@ test('answer mutations debounce parsing until the configured pause', async () =>
     assert.equal(h.extension.state.segments.length, 0);
     await h.advance(1);
     assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":30,"end":60}]');
-    assert.equal(observer.disconnected, true);
+    assert.equal(observer.disconnected, false);
     assert.deepEqual([...h.timers.values()].map(({ delay }) => delay), [10000]);
+    await h.advance(10000);
+    assert.equal(observer.disconnected, true);
 });
 
 test('reset prevents an already queued answer callback from restoring old segments', async () => {
@@ -224,4 +226,110 @@ test('playback can open chat, submit a prompt, parse a streamed answer, skip, an
     await h.advance(5000);
     assert.equal(close.clickCount, 1);
     assert.equal(h.timers.size, 0);
+});
+
+for (const sponsor of [false, true]) {
+    test(`old ${sponsor ? 'sponsor' : 'chapter'} timestamps cannot start the closing countdown`, async () => {
+        const h = loadContent();
+        h.fullscreen();
+        const close = h.mount(h.SELECTORS.close, new h.HTMLElement('button'));
+        h.mount(h.SELECTORS.input, new h.HTMLTextAreaElement());
+        const old = { text: sponsor ? '[SPONSOR] Old answer (0:30 – 1:00)' : 'Old introduction (0:00)', times: sponsor ? [30, 60] : [0] };
+        const chat = h.setChat([old]);
+        await h.extension.sendPrompt(0);
+        const observer = h.observers.find(item => item.target === chat);
+        await h.advance(12000);
+        assert.equal(close.clickCount, 0);
+        assert.equal(h.extension.state.segments.length, 0);
+        assert.equal(observer.disconnected, false);
+
+        // Re-rendering history creates new DOM nodes with the same old content.
+        h.setChat([old]);
+        observer.notify([{ type: 'childList' }]);
+        await h.advance(1200);
+        assert.equal([...h.timers.values()].some(timer => timer.delay === 10000), false);
+
+        h.setChat([old, { text: '[SPONSOR] New answer (2:00 – 2:30)', times: [120, 150] }]);
+        observer.notify([{ type: 'childList' }]);
+        await h.advance(1200);
+        assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":120,"end":150}]');
+        await h.advance(9999);
+        assert.equal(close.clickCount, 0);
+        await h.advance(1);
+        assert.equal(close.clickCount, 1);
+        assert.equal(observer.disconnected, true);
+    });
+}
+
+for (const sponsor of [false, true]) {
+    test(`streaming resumes after a pause in ${sponsor ? 'sponsor' : 'chapter'} timestamps and restarts the close delay`, async () => {
+        const h = loadContent();
+        h.fullscreen();
+        const close = h.mount(h.SELECTORS.close, new h.HTMLElement('button'));
+        const first = { text: sponsor ? '[SPONSOR] (0:30 – 1:00)' : 'Introduction (0:00)', times: sponsor ? [30, 60] : [0] };
+        const chat = h.setChat([first]);
+        await h.extension.watchForAnswer(0);
+        const observer = h.observers.find(item => item.target === chat);
+        await h.advance(1200);
+        await h.advance(9000);
+        h.setChat([first, { text: '[SPONSOR] (2:00 – 2:30)', times: [120, 150] }]);
+        observer.notify([{ type: 'childList' }]);
+        await h.advance(1200);
+        assert.equal(close.clickCount, 0);
+        assert.equal(h.extension.state.segments.length, sponsor ? 2 : 1);
+        await h.advance(9999);
+        assert.equal(close.clickCount, 0);
+        await h.advance(1);
+        assert.equal(close.clickCount, 1);
+        assert.equal(observer.disconnected, true);
+    });
+}
+
+test('the configured close delay starts after a slow AI response settles', async () => {
+    const h = loadContent({ storedSettings: { closeDelay: 3000 } });
+    await h.extension.loadSettings();
+    h.fullscreen();
+    const close = h.mount(h.SELECTORS.close, new h.HTMLElement('button'));
+    h.mount(h.SELECTORS.input, new h.HTMLTextAreaElement());
+    const chat = h.setChat([]);
+    await h.extension.sendPrompt(0);
+    await h.advance(20000);
+    assert.equal(close.clickCount, 0);
+    h.setChat([{ text: 'Introduction (0:00)', times: [0] }]);
+    h.observers.find(item => item.target === chat).notify([{ type: 'childList' }]);
+    await h.advance(1200);
+    await h.advance(2999);
+    assert.equal(close.clickCount, 0);
+    await h.advance(1);
+    assert.equal(close.clickCount, 1);
+});
+
+test('response timeouts leave the chat open', async () => {
+    const h = loadContent({ debug: true });
+    h.fullscreen();
+    const close = h.mount(h.SELECTORS.close, new h.HTMLElement('button'));
+    h.setChat([]);
+    await h.extension.watchForAnswer(0);
+    await h.advance(30000);
+    assert.equal(close.clickCount, 0);
+    assert.equal(h.timers.size, 0);
+    assert.ok(h.observers.every(observer => observer.disconnected));
+    assert.ok(h.logs.some(({ args }) => args[1] === 'answer timeout' && args[2].details.chatLeftOpen));
+});
+
+test('a response arriving just before the wait timeout gets the full close delay', async () => {
+    const h = loadContent();
+    h.fullscreen();
+    const close = h.mount(h.SELECTORS.close, new h.HTMLElement('button'));
+    const chat = h.setChat([]);
+    await h.extension.watchForAnswer(0);
+    await h.advance(29999);
+    h.setChat([{ text: 'Introduction (0:00)', times: [0] }]);
+    h.observers.find(item => item.target === chat).notify([{ type: 'childList' }]);
+    await h.advance(1200);
+    assert.equal(close.clickCount, 0);
+    await h.advance(9999);
+    assert.equal(close.clickCount, 0);
+    await h.advance(1);
+    assert.equal(close.clickCount, 1);
 });

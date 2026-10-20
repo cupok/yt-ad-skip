@@ -16,12 +16,14 @@ for (const [language, title, firstLabel] of [
         assert.equal(h.mainFields.children.length, 3);
         assert.equal(h.advancedFields.children.length, 4);
         assert.equal(h.mainFields.children[0].querySelector('label').textContent, firstLabel);
+        assert.equal(h.input('debug').type, 'checkbox');
+        assert.equal(h.input('debug').checked, true);
         for (const [key, field] of Object.entries(h.settings.FIELDS)) {
             const input = h.input(key);
-            assert.equal(input.value, String(field.default / 1000));
-            assert.equal(input.min, String(field.min / 1000));
+            assert.equal(input.value, String(Math.max(Math.ceil(field.min / 1000), Math.round(field.default / 1000))));
+            assert.equal(input.min, String(Math.ceil(field.min / 1000)));
             assert.equal(input.max, String(field.max / 1000));
-            assert.equal(input.step, '0.1');
+            assert.equal(input.step, '1');
             assert.equal(input.required, true);
             assert.equal(input.getAttribute('aria-describedby'), `${key}-hint`);
             assert.equal(input.parentElement.querySelector('label').htmlFor, key);
@@ -40,21 +42,21 @@ test('settings stay disabled until storage finishes loading', () => {
     assert.equal(h.fields.disabled, true);
     h.finishLoad();
     assert.equal(h.fields.disabled, false);
-    assert.equal(h.input('closeDelay').value, '3.5');
+    assert.equal(h.input('closeDelay').value, '4');
     assert.equal(h.input('autoSkipDelay').value, '5');
     assert.equal(h.writes.length, 0);
 });
 
 test('saving converts seconds to milliseconds and preserves a disabled auto-skip value', () => {
     const h = loadSettingsUI();
-    h.input('chatOpenDelay').value = '2.5';
+    h.input('chatOpenDelay').value = '2';
     h.input('autoSkipDelay').value = '0';
     const event = h.submit();
     assert.equal(event.defaultPrevented, true);
     const saved = h.storage[h.settings.STORAGE_KEY];
-    assert.equal(saved.chatOpenDelay, 2500);
+    assert.equal(saved.chatOpenDelay, 2000);
     assert.equal(saved.autoSkipDelay, 0);
-    assert.equal(saved.answerStableDelay, 1200);
+    assert.equal(saved.answerStableDelay, 1000);
     assert.equal(h.writes.length, 1);
     assert.equal(h.status.dataset.error, 'false');
     assert.ok(h.status.textContent.startsWith('Saved.'));
@@ -83,7 +85,8 @@ test('reset restores and saves every default value', () => {
     const h = loadSettingsUI({ stored: { ytAutoTimestampsSettings: { closeDelay: 2500, autoSkipDelay: 0 } } });
     h.reset.click();
     assert.equal(JSON.stringify(h.storage[h.settings.STORAGE_KEY]), JSON.stringify(h.settings.DEFAULTS));
-    for (const [key, value] of Object.entries(h.settings.DEFAULTS)) assert.equal(h.input(key).value, String(value / 1000));
+    for (const key of Object.keys(h.settings.FIELDS)) assert.equal(h.input(key).value, String(Math.round(h.settings.DEFAULTS[key] / 1000)));
+    assert.equal(h.input('debug').checked, h.settings.DEFAULTS.debug);
     assert.equal(h.status.textContent, 'Default settings restored.');
 });
 
@@ -97,13 +100,30 @@ test('storage load errors do not silently enable editing or overwrite saved valu
 
 test('storage write errors retain user input and re-enable controls', () => {
     const h = loadSettingsUI({ saveError: 'quota exceeded' });
-    h.input('closeDelay').value = '2.5';
+    h.input('closeDelay').value = '3';
+    h.input('debug').checked = false;
     h.submit();
     assert.equal(h.fields.disabled, false);
-    assert.equal(h.input('closeDelay').value, '2.5');
+    assert.equal(h.input('closeDelay').value, '3');
+    assert.equal(h.input('debug').checked, false);
     assert.equal(h.storage[h.settings.STORAGE_KEY], undefined);
     assert.equal(h.status.dataset.error, 'true');
     assert.ok(h.status.textContent.startsWith('Could not save settings.'));
+});
+
+test('debug can be saved off, restored on reopening, and reset to its default', () => {
+    const h = loadSettingsUI({ stored: { ytAutoTimestampsSettings: { closeDelay: 2500 } } });
+    assert.equal(h.input('debug').checked, true);
+    h.input('debug').checked = false;
+    h.submit();
+    const saved = h.storage[h.settings.STORAGE_KEY];
+    assert.equal(saved.debug, false);
+    assert.equal(saved.closeDelay, 3000);
+    const reopened = loadSettingsUI({ stored: h.storage });
+    assert.equal(reopened.input('debug').checked, false);
+    reopened.reset.click();
+    assert.equal(reopened.input('debug').checked, true);
+    assert.equal(reopened.storage[h.settings.STORAGE_KEY].debug, true);
 });
 
 test('editing a value clears previous save status', () => {

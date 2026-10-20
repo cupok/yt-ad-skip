@@ -105,9 +105,11 @@ test('an answer without sponsors closes normally without warning', async () => {
     await extension.watchForAnswer(0);
     runTimers(1200);
     assert.equal(logs.some(({ level }) => level === 'warn' || level === 'error'), false);
-    assert.equal(observers[0].disconnected, true);
+    assert.equal(observers[0].disconnected, false);
     assert.ok([...timers.values()].some(({ delay }) => delay === 10000));
     assert.equal([...timers.values()].some(({ delay }) => delay === 30000), false);
+    runTimers(10000);
+    assert.equal(observers[0].disconnected, true);
 });
 
 test('an answer timeout still reports a warning', async () => {

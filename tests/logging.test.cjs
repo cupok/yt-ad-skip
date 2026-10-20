@@ -4,7 +4,7 @@ const { loadContent } = require('./helpers/content.cjs');
 
 for (const debug of [false, true]) {
     for (const logToFile of [false, true]) {
-        test(`logging respects DEBUG=${debug} and LOG_TO_FILE=${logToFile} independently`, () => {
+        test(`logging respects debug=${debug} and LOG_TO_FILE=${logToFile} independently`, () => {
             const h = loadContent({ debug, logToFile });
             h.extension.log('information', { value: 1 });
             h.extension.logWarn('warning');
@@ -26,6 +26,32 @@ for (const debug of [false, true]) {
         });
     }
 }
+
+for (const debug of [false, true]) {
+    test(`saved debug=${debug} controls console logging after loading settings`, async () => {
+        const h = loadContent({ debug: !debug, logToFile: true, storedSettings: { debug } });
+        await h.extension.loadSettings();
+        h.extension.log('after loading');
+        assert.equal(h.extension.settings.debug, debug);
+        assert.equal(h.logs.length, debug ? 1 : 0);
+        assert.equal(h.deliveries.length, 1);
+    });
+}
+
+test('debug toggles on open tabs without interrupting file logging', () => {
+    const h = loadContent({ debug: true, logToFile: true });
+    h.extension.bindSettingsChanges();
+    h.extension.log('enabled');
+    assert.equal(h.logs.length, 1);
+    h.changeSettings({ debug: false });
+    for (const method of ['log', 'logWarn', 'logError']) h.extension[method]('disabled');
+    assert.equal(h.logs.length, 1);
+    assert.equal(h.deliveries.length, 5);
+    h.changeSettings({ debug: true });
+    h.extension.log('enabled again');
+    assert.equal(h.logs.at(-1).args[1], 'enabled again');
+    assert.equal(h.deliveries.length, 7);
+});
 
 test('structured logs serialize errors, circular values, BigInt, functions, and depth limits', () => {
     const h = loadContent({ logToFile: true });

@@ -10,19 +10,21 @@
         answerTimeout: { default: 30000, min: 1000, max: 600000 },
         answerStableDelay: { default: 1200, min: 100, max: 600000 },
     });
-    const DEFAULTS = Object.freeze(Object.fromEntries(
-        Object.entries(FIELDS).map(([key, field]) => [key, field.default])
-    ));
+    const DEFAULTS = Object.freeze({
+        ...Object.fromEntries(Object.entries(FIELDS).map(([key, field]) => [key, field.default])),
+        debug: true,
+    });
 
     function normalize(value) {
         const input = value && typeof value === 'object' ? value : {};
 
-        return Object.fromEntries(Object.entries(FIELDS).map(([key, field]) => {
+        const delays = Object.fromEntries(Object.entries(FIELDS).map(([key, field]) => {
             const number = input[key];
             const valid = typeof number === 'number' && Number.isFinite(number)
                 && number >= field.min && number <= field.max;
             return [key, valid ? Math.round(number) : field.default];
         }));
+        return { ...delays, debug: typeof input.debug === 'boolean' ? input.debug : DEFAULTS.debug };
     }
 
     globalThis.YtAdSkipSettings = Object.freeze({ STORAGE_KEY, FIELDS, DEFAULTS, normalize });

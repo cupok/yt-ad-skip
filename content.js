@@ -21,7 +21,6 @@ const BUTTON_STYLE = {
 };
 
 // Debug
-const DEBUG = true;
 const LOG_TO_FILE = true;
 const LOG_MESSAGE_TYPE = 'YT_AD_SKIP_LOG';
 const LOG_CONSOLE_PREFIX = '[yt-ad-skip]';
@@ -49,7 +48,7 @@ function logError(message, ...details) {
 function writeLog(level, message, details) {
     const entry = buildLogEntry(level, message, details);
 
-    if (DEBUG) {
+    if (settings.debug) {
         const method = level === 'error'
             ? 'error'
             : level === 'warn'
@@ -110,7 +109,7 @@ function sendLogEntry(entry) {
             try {
                 const error = runtimeApi['lastError'];
 
-                if (error && DEBUG) {
+                if (error && settings.debug) {
                     console.debug(LOG_CONSOLE_PREFIX, 'log delivery failed', error.message);
                 }
             } catch (_error) {
@@ -118,7 +117,7 @@ function sendLogEntry(entry) {
             }
         });
     } catch (error) {
-        if (DEBUG) {
+        if (settings.debug) {
             console.debug(LOG_CONSOLE_PREFIX, 'log delivery threw', error);
         }
     }
@@ -419,6 +418,7 @@ let runId = 0;
 // Stores sponsor lines that existed before our prompt.
 // This helps avoid parsing an old answer from a previous run.
 let ignoredSponsorLines = new Set();
+let ignoredTimestampLines = new Set();
 
 // Helpers
 function getVideoSrc(video) {
@@ -607,6 +607,20 @@ function normalizeText(text) {
     return text.replace(/\s+/g, ' ').trim();
 }
 
+function getTimestampLineSignature(node) {
+    return JSON.stringify([
+        normalizeText(node.textContent || ''),
+        [...node.querySelectorAll(chatTimestampItemSelector)].map((timestamp) => timestamp.getAttribute('data-time')),
+    ]);
+}
+
+function collectExistingTimestampLines() {
+    const chat = document.querySelector(chatSelector);
+    return new Set(chat
+        ? [...chat.querySelectorAll('li, p')].map(getTimestampLineSignature)
+        : []);
+}
+
 function isSponsorLine(text) {
     if (/\[SPONSOR\]/i.test(text)) {
         return true;
@@ -635,6 +649,10 @@ function getChatSnapshot(chat = document.querySelector(chatSelector)) {
         element: describeElement(chat),
         itemCount: nodes.length,
         timestampCount: chat.querySelectorAll(chatTimestampItemSelector).length,
+        newTimestampCount: nodes.reduce((count, node) => {
+            return count + (ignoredTimestampLines.has(getTimestampLineSignature(node))
+                ? 0 : node.querySelectorAll(chatTimestampItemSelector).length);
+        }, 0),
         sponsorCandidateCount: sponsorTexts.length,
         textSample: normalizeText(chat.textContent || '').slice(0, 500),
         sponsorSamples: sponsorTexts.slice(0, 10),
@@ -642,7 +660,7 @@ function getChatSnapshot(chat = document.querySelector(chatSelector)) {
 }
 
 function hasTimestampAnswer(chatSnapshot) {
-    return Boolean(chatSnapshot && chatSnapshot.timestampCount > 0);
+    return Boolean(chatSnapshot && chatSnapshot.newTimestampCount > 0);
 }
 
 function isVisibleElement(element) {
@@ -716,6 +734,9 @@ function scheduleChatClose(localRunId, reason) {
 
     closeTimer = setTimeout(() => {
         closeTimer = null;
+        if (isCurrentRun(localRunId)) {
+            clearAnswerWatcher();
+        }
         closeChat(localRunId, reason);
     }, settings.closeDelay);
 }
@@ -1163,6 +1184,10 @@ async function sendPrompt(localRunId) {
     }
 
     const timestampPrompt = getTimestampPrompt();
+    // Chat history may appear only after opening the panel. Capture it just
+    // before submission so old timestamps cannot start the closing countdown.
+    ignoredSponsorLines = collectExistingSponsorLines();
+    ignoredTimestampLines = collectExistingTimestampLines();
 
     log('chat textarea found; setting prompt', {
         textarea: describeElement(textarea),
@@ -1272,6 +1297,18 @@ async function watchForAnswer(localRunId) {
             clearTimeout(answerStableTimer);
         }
 
+        // Keep the panel open while the response continues streaming, even if
+        // an earlier pause already started a closing countdown.
+        if (mutations.length && closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+
+        if (hasTimestampAnswer(getChatSnapshot(chat)) && answerTimeout) {
+            clearTimeout(answerTimeout);
+            answerTimeout = null;
+        }
+
         if (
             parseScheduleCount <= 3 ||
             shouldLogThrottled('answer-parse-scheduled', String(localRunId), 5000)
@@ -1317,7 +1354,6 @@ async function watchForAnswer(localRunId) {
                 });
 
                 if (hasTimestampAnswer(chatSnapshot)) {
-                    clearAnswerWatcher();
                     log('answer has timestamps but no sponsor segments; closing chat', {
                         localRunId,
                         chat: chatSnapshot,
@@ -1329,7 +1365,6 @@ async function watchForAnswer(localRunId) {
             }
 
             segments = found;
-            clearAnswerWatcher();
 
             log('segments stored', {
                 localRunId,
@@ -1358,14 +1393,17 @@ async function watchForAnswer(localRunId) {
     });
 
     answerTimeout = setTimeout(() => {
+        if (!isCurrentRun(localRunId)) {
+            return;
+        }
         clearAnswerWatcher();
         logWarn('answer timeout', {
             localRunId,
             parseScheduleCount,
             observedMutationCount,
             chat: getChatSnapshot(chat),
+            chatLeftOpen: true,
         });
-        closeChat(localRunId, 'answer-timeout');
     }, settings.answerTimeout);
 
     // Parse once immediately in case the answer appears before the observer starts.
@@ -1728,6 +1766,7 @@ function reset() {
     lastSkipButtonSegmentKey = null;
     chatOpenAttemptCount = 0;
     ignoredSponsorLines = new Set();
+    ignoredTimestampLines = new Set();
 
     clearTimers();
 

@@ -17,10 +17,14 @@ function loadSettingsUI({ languages = ['en'], language = '', stored = {}, loadEr
     const advancedFields = new HTMLElement();
     advanced.append(advancedFields);
     const reset = new HTMLElement('button');
+    const debug = new dom.HTMLInputElement();
+    debug.id = 'debug';
+    debug.name = 'debug';
+    debug.type = 'checkbox';
     const status = new HTMLElement('p');
     const exportButton = new HTMLElement('button');
     form.append(fields);
-    fields.append(mainFields, advanced, reset);
+    fields.append(mainFields, advanced, debug, reset);
     document.body.append(form, status, exportButton);
     for (const [id, element] of Object.entries({
         'settings-form': form, 'settings-fields': fields, 'main-fields': mainFields,

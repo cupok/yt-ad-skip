@@ -31,6 +31,16 @@ test('out-of-range and nonnumeric delay values cannot reach timers', () => {
     assert.equal(normalize({ answerTimeout: 0 }).answerTimeout, DEFAULTS.answerTimeout);
 });
 
+test('debug settings preserve booleans and use the current default for old or malformed values', () => {
+    assert.equal(DEFAULTS.debug, true);
+    assert.equal(normalize({ debug: true }).debug, true);
+    assert.equal(normalize({ debug: false }).debug, false);
+    for (const debug of [undefined, null, 'false', 0, 1, {}]) {
+        assert.equal(normalize({ debug }).debug, DEFAULTS.debug);
+    }
+    assert.equal(normalize({ closeDelay: 2500 }).debug, DEFAULTS.debug);
+});
+
 test('toolbar opens settings and shared configuration loads before the content script', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
     assert.equal(manifest.action.default_popup, 'settings.html');
