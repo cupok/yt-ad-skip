@@ -108,7 +108,7 @@ local file-log collection. Review [PRIVACY.md](PRIVACY.md) before sharing logs.
 Clone the source repository for development; release ZIPs contain the installable
 extension and documentation, without tests or development tooling.
 
-Use Git and Node.js 22.5 or newer; Node 24 is the recommended local version (`.nvmrc`).
+Use Git and Node.js 24 (`.nvmrc`).
 There are no package dependencies and no install or build step for development.
 
 ```sh

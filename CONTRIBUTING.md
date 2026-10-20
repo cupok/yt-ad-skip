@@ -23,7 +23,7 @@ not reserve implementation work or guarantee it will be accepted.
 
 1. Fork the repository, clone your fork, and create a short-lived branch from
    `main`, such as `fix/chat-timeout` or `feat/new-language`.
-2. Use Node.js 22.5+ (recommended: Node 24). No `npm install` is needed.
+2. Use Node.js 24 (`.nvmrc`). No `npm install` is needed.
 3. Keep the change focused and follow the existing plain JavaScript style.
 4. Add regression tests for behavior changes. Put test utilities in
    `tests/helpers`; production scripts should not expose test-only APIs.

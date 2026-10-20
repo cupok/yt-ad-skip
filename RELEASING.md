@@ -34,7 +34,7 @@ create a branch, and open a PR. They cannot push to your `main` branch unless yo
 grant access. You decide what to merge and what to release.
 
 Use short-lived branches such as `fix/chat-timeout`. CI checks syntax, metadata,
-and tests on Node 22 and 24. Review behavior and run a manual Chrome smoke check
+and tests on Node 24. Review behavior and run a manual Chrome smoke check
 when the change touches the YouTube integration or settings layout. Merge a
 focused PR with **Squash and merge**, using a Conventional Commit title.
 

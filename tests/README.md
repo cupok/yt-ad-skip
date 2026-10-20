@@ -1,6 +1,6 @@
 # Tests
 
-Run with Git and Node.js 22.5 or newer. No package dependencies or installation
+Run with Git and Node.js 24. No package dependencies or installation
 are required. Release tests create isolated temporary Git repositories.
 
 ```sh
