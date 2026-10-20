@@ -3,7 +3,10 @@
   "name": "YT Ad Skip",
   "version": "1.0.0",
   "description": "Automatically skips sponsor and fundraising segments on YouTube using AI-generated timestamps.",
-  "permissions": ["downloads", "storage"],
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
   "action": {
     "default_title": "YT Ad Skip settings",
     "default_popup": "settings.html"
@@ -17,8 +20,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["settings.js", "content.js"],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "settings.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
