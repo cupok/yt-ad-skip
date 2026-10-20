@@ -2,23 +2,57 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { loadContent } = require('./helpers/content.cjs');
 
-for (const [name, properties, fullscreen] of [
-    ['outside fullscreen', {}, false],
-    ['a video that is not ready', { readyState: 2 }, true],
-    ['a short video', { duration: 179 }, true],
-    ['a live stream', { duration: Infinity }, true],
-    ['an unknown duration', { duration: NaN }, true],
+for (const [name, properties, fullscreen, reason] of [
+    ['outside fullscreen', {}, false, 'not-fullscreen'],
+    ['a video that is not ready', { readyState: 2 }, true, 'ready-state-2'],
+    ['a short video', { duration: 179 }, true, 'duration-too-short-179'],
+    ['a live stream', { duration: Infinity }, true, 'duration-Infinity'],
+    ['an unknown duration', { duration: NaN }, true, 'duration-NaN'],
 ]) {
     test(`player does not start for ${name}`, () => {
-        const h = loadContent();
+        const h = loadContent({ debug: true });
         if (fullscreen) h.fullscreen();
-        const video = h.video(properties);
+        const video = h.mount('video', h.video(properties));
         h.extension.bindPlayerEvents(video);
         video.dispatchEvent(new h.Event('play'));
+        h.extension.bindFullscreenChange();
+        h.document.dispatchEvent(new h.Event('fullscreenchange'));
         assert.equal(h.extension.state.started, false);
         assert.equal(h.timers.size, 0);
+        const blocked = h.logs.filter(({ args }) => args[1].startsWith('start gate blocked'));
+        assert.equal(blocked.length, 2);
+        assert.ok(blocked.every(({ level, args }) => level === 'log' && args[2].details.reasons.includes(reason)));
+        assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
     });
 }
+
+test('a video starts normally once its loading blockers clear', () => {
+    const h = loadContent({ debug: true });
+    h.fullscreen();
+    const video = h.video({ readyState: 0, duration: NaN });
+    h.extension.bindPlayerEvents(video);
+    video.dispatchEvent(new h.Event('loadedmetadata'));
+    assert.equal(h.extension.state.started, false);
+    video.readyState = 3;
+    video.duration = 600;
+    video.dispatchEvent(new h.Event('durationchange'));
+    assert.equal(h.extension.state.started, true);
+    assert.equal(h.timers.size, 1);
+    assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
+});
+
+test('startup diagnostics from time updates remain throttled', async () => {
+    const h = loadContent({ debug: true });
+    const video = h.video({ readyState: 2 });
+    h.extension.bindPlayerEvents(video);
+    for (let i = 0; i < 10; i++) video.dispatchEvent(new h.Event('timeupdate'));
+    const blocked = () => h.logs.filter(({ args }) => args[1] === 'start gate blocked from player event');
+    assert.equal(blocked().length, 1);
+    await h.advance(10000);
+    video.dispatchEvent(new h.Event('timeupdate'));
+    assert.equal(blocked().length, 2);
+    assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
+});
 
 for (const event of ['loadedmetadata', 'durationchange', 'play', 'timeupdate', 'seeking', 'seeked']) {
     test(`${event} starts an eligible video once`, () => {

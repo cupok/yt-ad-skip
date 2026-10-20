@@ -1015,14 +1015,9 @@ function bindPlayerEvents(player) {
                     `${event.type}:${startBlockReasons.join('|')}`
                 )
             ) {
-                const logStartGateBlocked = (
-                    startBlockReasons.length === 1 &&
-                    startBlockReasons[0] === 'not-fullscreen'
-                )
-                    ? log
-                    : logWarn;
-
-                logStartGateBlocked('start gate blocked from player event', {
+                // Loading, unsupported durations, and windowed playback are
+                // expected states, not extension failures.
+                log('start gate blocked from player event', {
                     ...getStartGateSnapshot(video, event.type),
                     reasons: startBlockReasons,
                 });
@@ -1808,7 +1803,7 @@ function bindFullscreenChange() {
                 log('start gate passed from fullscreenchange', getStartGateSnapshot(video, 'fullscreenchange'));
                 start(video);
             } else {
-                logWarn('start gate blocked from fullscreenchange', {
+                log('start gate blocked from fullscreenchange', {
                     ...getStartGateSnapshot(video, 'fullscreenchange'),
                     reasons: startBlockReasons,
                 });
