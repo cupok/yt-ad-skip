@@ -25,7 +25,7 @@ const BUTTON_STYLE = {
 };
 
 // Debug
-const DEBUG = false;
+const DEBUG = true;
 const LOG_TO_FILE = true;
 const LOG_MESSAGE_TYPE = 'YT_AUTO_TIMESTAMPS_LOG';
 const LOG_CONSOLE_PREFIX = '[yt-auto-timestamps]';
@@ -331,11 +331,64 @@ const chatCloseButtonSelector = 'ytd-watch-flexy[fullscreen] #visibility-button 
 const chatTextareaSelector = '.chatInputViewModelChatInputForm .chatInputViewModelChatInput';
 const chatTimestampItemSelector = '.ytwMarkdownDivTimestamp';
 
-// Prompt
-const timestampPrompt = `List the video's key timestamps strictly in this format:
-- (TIME) Topic.
-- Sponsor segment: (START – END) Topic.
-Only label a segment "sponsor" if it clearly is one.`;
+// Language follows YouTube's UI, then the browser's preferred language.
+const SPONSOR_MARKER = '[SPONSOR]';
+const TRANSLATIONS = {
+    en: { skip: 'Skip segment', sponsor: 'Sponsor segment', topic: 'Topic' },
+    uk: { skip: 'Пропустити сегмент', sponsor: 'Спонсорський сегмент', topic: 'Тема' },
+    ru: { skip: 'Пропустить сегмент', sponsor: 'Спонсорский сегмент', topic: 'Тема' },
+};
+const SPONSOR_LABEL_PATTERN = new RegExp(
+    `(?:^|[^\\p{L}\\p{N}])(?:${Object.values(TRANSLATIONS).map(({ sponsor }) => sponsor).join('|')})(?=$|[^\\p{L}\\p{N}])`,
+    'iu'
+);
+
+let userLanguage = detectUserLanguage();
+
+function detectUserLanguage() {
+    const candidates = [
+        document.documentElement.lang,
+        ...(navigator.languages || []),
+        navigator.language,
+    ];
+
+    for (const candidate of candidates) {
+        if (typeof candidate !== 'string' || !candidate.trim()) {
+            continue;
+        }
+
+        try {
+            const [language] = Intl.getCanonicalLocales(candidate.trim().replace(/_/g, '-'));
+
+            if (language && Object.prototype.hasOwnProperty.call(TRANSLATIONS, language.split('-')[0])) {
+                return language;
+            }
+        } catch (_error) {
+            // Ignore malformed language tags and try the next preference.
+        }
+    }
+
+    return 'en';
+}
+
+function getTranslations(language = userLanguage) {
+    const baseLanguage = language.split('-')[0];
+
+    return Object.prototype.hasOwnProperty.call(TRANSLATIONS, baseLanguage)
+        ? TRANSLATIONS[baseLanguage]
+        : TRANSLATIONS.en;
+}
+
+function getTimestampPrompt() {
+    const { sponsor, topic } = getTranslations();
+
+    return `List the video's key timestamps. Write all topic descriptions in the language with BCP 47 tag "${userLanguage}", regardless of the video's language.
+Use strictly this format, keeping the marker ${SPONSOR_MARKER} exactly as written:
+- (TIME) ${topic}.
+- ${SPONSOR_MARKER} ${sponsor}: (START – END) ${topic}.
+Only use ${SPONSOR_MARKER} for clear sponsor or paid advertisement segments. Do not use it for ordinary topics or statements that there are no sponsors.
+Use timestamps with ASCII digits in M:SS or H:MM:SS format.`;
+}
 
 // State
 let currentVideoSrc = null;
@@ -560,7 +613,16 @@ function normalizeText(text) {
 }
 
 function isSponsorLine(text) {
-    return /\bsponsor(?:\s+segment)?\b/i.test(text);
+    if (/\[SPONSOR\]/i.test(text)) {
+        return true;
+    }
+
+    // Keep recognizing existing answers that predate the fixed marker.
+    if (/\bsponsor(?:\s+segment)?\b/i.test(text)) {
+        return true;
+    }
+
+    return SPONSOR_LABEL_PATTERN.test(text);
 }
 
 function getChatSnapshot(chat = document.querySelector(chatSelector)) {
@@ -1110,9 +1172,12 @@ async function sendPrompt(localRunId) {
         return;
     }
 
+    const timestampPrompt = getTimestampPrompt();
+
     log('chat textarea found; setting prompt', {
         textarea: describeElement(textarea),
         promptLength: timestampPrompt.length,
+        language: userLanguage,
     });
 
     setTextInputValue(textarea, timestampPrompt);
@@ -1254,7 +1319,7 @@ async function watchForAnswer(localRunId) {
             });
 
             if (!found.length) {
-                logWarn('answer parse produced no sponsor segments', {
+                log('answer parse produced no sponsor segments', {
                     localRunId,
                     parseScheduleCount,
                     observedMutationCount,
@@ -1521,7 +1586,9 @@ function updateSkipButton(video) {
     const percent = (FILL_GROWS ? progress : 1 - progress) * 100;
 
     skipButton.style.background = `linear-gradient(to right, ${FILL_COLOR} ${percent}%, ${TRACK_COLOR} ${percent}%)`;
-    skipButton.textContent = `Skip segment → ${format(segmentEnd)}`;
+    skipButton.lang = userLanguage;
+    skipButton.dir = 'auto';
+    skipButton.textContent = `${getTranslations().skip} → ${format(segmentEnd)}`;
 
     const previousDisplay = skipButton.style.display;
     skipButton.style.display = 'block';
@@ -1698,6 +1765,7 @@ function start(video) {
         });
     }
 
+    userLanguage = detectUserLanguage();
     started = true;
     currentVideoSrc = getVideoSrc(video);
     activePlayer = video;
@@ -1706,6 +1774,7 @@ function start(video) {
     log('start completed; launching timestamps flow', {
         video: describeVideo(video),
         currentVideoSrc,
+        language: userLanguage,
     });
 
     timestamps();
@@ -1882,6 +1951,7 @@ function init() {
         manifestHint: 'YT Auto Timestamps',
         pageUrl: window.location.href,
         readyState: document.readyState,
+        language: userLanguage,
     });
 
     bindGlobalErrorLogging();
