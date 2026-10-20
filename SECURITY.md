@@ -11,9 +11,7 @@ vulnerability reporting is enabled. Include the affected version, reproduction
 steps, impact, and a minimal example. Remove unrelated personal information.
 
 Do not publish exploitable details, credentials, or raw diagnostic logs in a
-public issue. If private reporting is unavailable, open a public issue asking
-the maintainer to enable a private reporting channel, without disclosing the
-vulnerability itself.
+public issue.
 
 Reports are handled by the maintainer on a voluntary basis. There is currently
 no response-time guarantee or paid bug bounty.
