@@ -499,7 +499,8 @@ function waitForElement(selector, timeout, localRunId) {
                     element: describeElement(element),
                 });
             } else {
-                logWarn('waitForElement resolved without element', {
+                const report = isCurrentRun(localRunId) ? logWarn : log;
+                report('waitForElement resolved without element', {
                     selector,
                     localRunId,
                     reason,
@@ -762,7 +763,7 @@ function scheduleChatClose(localRunId, reason) {
 
 function closeChat(localRunId, reason) {
     if (!isCurrentRun(localRunId)) {
-        logWarn('chat close aborted because run is stale', {
+        log('chat close aborted because run is stale', {
             localRunId,
             currentRunId: runId,
             reason,
@@ -1035,7 +1036,8 @@ function bindPlayerEvents(player) {
                 previousSrc: currentVideoSrc,
                 nextSrc: videoSrc,
             });
-            logWarn('player emptied with a different video src; resetting', {
+            // Replacing the media source is a normal player lifecycle event.
+            log('player emptied with a different video src; resetting', {
                 previousSrc: currentVideoSrc,
                 nextSrc: videoSrc,
             });
@@ -1112,7 +1114,7 @@ function timestamps(delay = settings.chatOpenDelay) {
         openChatTimer = null;
 
         if (!isCurrentRun(localRunId)) {
-            logWarn('timestamps flow aborted because run is stale', {
+            log('timestamps flow aborted because run is stale', {
                 localRunId,
                 currentRunId: runId,
             });
@@ -1190,7 +1192,7 @@ async function sendPrompt(localRunId) {
     );
 
     if (!isCurrentRun(localRunId)) {
-        logWarn('sendPrompt aborted because run is stale', {
+        log('sendPrompt aborted because run is stale', {
             localRunId,
             currentRunId: runId,
         });
@@ -1277,7 +1279,7 @@ async function watchForAnswer(localRunId) {
     );
 
     if (!isCurrentRun(localRunId)) {
-        logWarn('watchForAnswer aborted because run is stale', {
+        log('watchForAnswer aborted because run is stale', {
             localRunId,
             currentRunId: runId,
         });
@@ -1305,7 +1307,7 @@ async function watchForAnswer(localRunId) {
         observedMutationCount += mutations.length;
 
         if (!isCurrentRun(localRunId)) {
-            logWarn('answer parse schedule aborted because run is stale', {
+            log('answer parse schedule aborted because run is stale', {
                 localRunId,
                 currentRunId: runId,
                 parseScheduleCount,
@@ -1349,7 +1351,7 @@ async function watchForAnswer(localRunId) {
         // until the DOM becomes quiet for a moment.
         answerStableTimer = setTimeout(() => {
             if (!isCurrentRun(localRunId)) {
-                logWarn('answer parse aborted because run is stale', {
+                log('answer parse aborted because run is stale', {
                     localRunId,
                     currentRunId: runId,
                 });
@@ -1545,7 +1547,7 @@ function updateSkipButton(video) {
     }
 
     if (skipButton && !skipButton.isConnected) {
-        logWarn('skip button reference is disconnected; recreating on next active segment', {
+        log('skip button reference is disconnected; recreating on next active segment', {
             button: describeSkipButton(),
             video: describeVideo(video),
         });
@@ -1694,28 +1696,28 @@ function bindShortcuts() {
         });
 
         if (isEditableTarget(event.target)) {
-            logWarn('skip shortcut ignored because focus is editable', {
+            log('skip shortcut ignored because focus is editable', {
                 target: describeElement(event.target),
             });
             return;
         }
 
         if (!segments.length) {
-            logWarn('skip shortcut ignored because no segments are available');
+            log('skip shortcut ignored because no segments are available');
             return;
         }
 
         const video = activePlayer || document.querySelector('video');
 
         if (!video) {
-            logWarn('skip shortcut ignored because video is missing');
+            log('skip shortcut ignored because video is missing');
             return;
         }
 
         const segment = findCurrentSegment(video);
 
         if (!segment) {
-            logWarn('skip shortcut ignored because current time is outside skippable segments', {
+            log('skip shortcut ignored because current time is outside skippable segments', {
                 currentTime: video.currentTime,
                 segments,
             });
@@ -1829,7 +1831,7 @@ function bindFullscreenChange() {
         const video = activePlayer || document.querySelector('video');
 
         if (!video) {
-            logWarn('fullscreenchange ignored because no video was found', {
+            log('fullscreenchange ignored because no video was found', {
                 fullscreenElement: describeElement(document.fullscreenElement),
             });
             return;
@@ -1904,7 +1906,7 @@ function bindCurrentOrFutureVideo() {
         return;
     }
 
-    logWarn('no existing video found; installing video observer');
+    log('no existing video found; installing video observer');
 
     videoObserver = new MutationObserver((mutations) => {
         for (const mutation of mutations) {

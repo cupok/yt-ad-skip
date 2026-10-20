@@ -30,3 +30,5 @@ history. Development changes stay under `Unreleased` until release preparation.
 - Old chat history cannot start the closing countdown or reintroduce old ranges.
 - Normal startup conditions and answers without skippable segments are logged
   as informational diagnostics rather than extension warnings.
+- Media source resets, stale work after navigation, and other expected lifecycle
+  events no longer appear as extension warnings. Actual failures still do.

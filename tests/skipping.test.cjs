@@ -154,7 +154,7 @@ for (const ctrlKey of [false, true]) {
 
 for (const target of ['input', 'textarea', 'contenteditable']) {
     test(`skip shortcuts leave ${target} editing alone`, () => {
-        const h = setup();
+        const h = setup({ debug: true });
         h.extension.bindShortcuts();
         const element = target === 'contenteditable' ? new h.HTMLElement() : h.document.createElement(target);
         if (target === 'contenteditable') element.isContentEditable = true;
@@ -162,12 +162,13 @@ for (const target of ['input', 'textarea', 'contenteditable']) {
         h.document.dispatchEvent(event);
         assert.equal(h.player.currentTime, 45);
         assert.equal(event.defaultPrevented, false);
+        assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
     });
 }
 
 for (const condition of ['unrelated key', 'outside segment', 'no segments', 'no video']) {
     test(`skip shortcuts do nothing with ${condition}`, () => {
-        const h = setup();
+        const h = setup({ debug: true });
         h.extension.bindShortcuts();
         if (condition === 'outside segment') h.player.currentTime = 75;
         if (condition === 'no segments') h.extension.setSegments([]);
@@ -179,6 +180,7 @@ for (const condition of ['unrelated key', 'outside segment', 'no segments', 'no 
         h.document.dispatchEvent(event);
         assert.equal(h.player.currentTime, before);
         assert.equal(event.defaultPrevented, false);
+        assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
     });
 }
 

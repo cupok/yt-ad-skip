@@ -82,7 +82,7 @@ test('video discovery binds an existing video without an observer', () => {
 
 for (const nested of [false, true]) {
     test(`video discovery observes a future ${nested ? 'nested' : 'direct'} video`, () => {
-        const h = loadContent();
+        const h = loadContent({ debug: true });
         h.extension.bindCurrentOrFutureVideo();
         const oldObserver = h.observers[0];
         h.extension.bindCurrentOrFutureVideo();
@@ -95,6 +95,7 @@ for (const nested of [false, true]) {
         assert.equal(h.extension.state.activePlayer, video);
         assert.equal(observer.disconnected, true);
         assert.equal(video.listeners.get('play').size, 1);
+        assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
     });
 }
 
@@ -109,6 +110,18 @@ test('entering fullscreen can start playback and listeners are bound once', () =
     h.document.dispatchEvent(new h.Event('fullscreenchange'));
     assert.equal(h.extension.state.started, true);
     assert.equal(h.document.listeners.get('fullscreenchange').size, 1);
+});
+
+test('fullscreen changes without a video are informational', () => {
+    const h = loadContent({ debug: true });
+    h.extension.bindFullscreenChange();
+    h.fullscreen();
+    h.document.dispatchEvent(new h.Event('fullscreenchange'));
+    assert.equal(h.extension.state.started, false);
+    assert.equal(h.timers.size, 0);
+    assert.ok(h.logs.some(({ level, args }) => level === 'log'
+        && args[1] === 'fullscreenchange ignored because no video was found'));
+    assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
 });
 
 test('cancel controls remain usable after leaving fullscreen', async () => {
@@ -128,7 +141,7 @@ test('cancel controls remain usable after leaving fullscreen', async () => {
 });
 
 test('source changes cancel old work and reset segments', () => {
-    const h = loadContent();
+    const h = loadContent({ debug: true, logToFile: true });
     h.fullscreen();
     const video = h.video({ currentTime: 45 });
     h.extension.bindPlayerEvents(video);
@@ -143,6 +156,12 @@ test('source changes cancel old work and reset segments', () => {
     assert.equal(h.extension.state.segments.length, 0);
     assert.equal(button.isConnected, false);
     assert.equal(h.timers.size, 0);
+    const reset = h.deliveries.find(({ entry }) =>
+        entry.message === 'player emptied with a different video src; resetting').entry;
+    assert.equal(reset.level, 'info');
+    assert.equal(reset.details.previousSrc, 'video:test');
+    assert.equal(reset.details.nextSrc, 'video:next');
+    assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
 });
 
 test('YouTube navigation clears pending work and binds the next video', async () => {

@@ -21,23 +21,33 @@ test('waiting detects an element inserted later and releases its observer and ti
 });
 
 test('waiting for a missing element times out and releases its observer', async () => {
-    const h = loadContent();
+    const h = loadContent({ debug: true });
     const promise = h.extension.waitForElement('#input', 1000, 0);
     await h.advance(1000);
     assert.equal(await promise, null);
     assert.equal(h.observers[0].disconnected, true);
     assert.equal(h.timers.size, 0);
+    assert.ok(h.logs.some(({ level, args }) => level === 'warn'
+        && args[1] === 'waitForElement resolved without element'
+        && args[2].details.reason === 'timeout'));
 });
 
-test('waiting for an element cannot complete for a previous video', async () => {
-    const h = loadContent();
-    const promise = h.extension.waitForElement('#input', 1000, 0);
-    h.extension.reset();
-    h.mount('#input', new h.HTMLElement());
-    h.observers[0].notify();
-    assert.equal(await promise, null);
-    assert.equal(h.timers.size, 0);
-});
+for (const completion of ['mutation', 'timeout']) {
+    test(`waiting for an element from a previous video ends quietly on ${completion}`, async () => {
+        const h = loadContent({ debug: true });
+        const promise = h.extension.waitForElement('#input', 1000, 0);
+        h.extension.reset();
+        if (completion === 'mutation') {
+            h.mount('#input', new h.HTMLElement());
+            h.observers[0].notify();
+        } else {
+            await h.advance(1000);
+        }
+        assert.equal(await promise, null);
+        assert.equal(h.timers.size, 0);
+        assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
+    });
+}
 
 test('opening chat retries twice and then stops when the button is unavailable', async () => {
     const h = loadContent({ debug: true });
@@ -46,6 +56,7 @@ test('opening chat retries twice and then stops when the button is unavailable',
     await h.advance(5000);
     const warnings = h.logs.filter(({ args }) => args[1] === 'chat open button not found');
     assert.equal(warnings.length, 3);
+    assert.ok(warnings.every(({ level }) => level === 'warn'));
     assert.equal(warnings[2].args[2].details.willRetry, false);
     assert.equal(h.timers.size, 0);
 });
@@ -63,7 +74,7 @@ test('scheduled chat opening is cancelled when fullscreen is exited', async () =
 });
 
 test('a stale scheduled chat callback cannot open chat on the next video', () => {
-    const h = loadContent();
+    const h = loadContent({ debug: true });
     h.fullscreen();
     const button = h.mount(h.SELECTORS.open, new h.HTMLElement('button'));
     h.extension.timestamps();
@@ -72,6 +83,7 @@ test('a stale scheduled chat callback cannot open chat on the next video', () =>
     callback();
     assert.equal(button.clickCount, 0);
     assert.equal(h.timers.size, 0);
+    assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
 });
 
 for (const tag of ['input', 'textarea', 'div']) {
@@ -104,13 +116,14 @@ test('prompt submission stops when the textarea never appears', async () => {
 });
 
 test('prompt submission does not write to an input after navigation', async () => {
-    const h = loadContent();
+    const h = loadContent({ debug: true });
     const input = h.mount(h.SELECTORS.input, new h.HTMLTextAreaElement());
     const promise = h.extension.sendPrompt(0);
     h.extension.reset();
     await promise;
     assert.equal(input.value, '');
     assert.equal(h.timers.size, 0);
+    assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
 });
 
 test('answer mutations debounce parsing until the configured pause', async () => {
@@ -132,7 +145,7 @@ test('answer mutations debounce parsing until the configured pause', async () =>
 });
 
 test('reset prevents an already queued answer callback from restoring old segments', async () => {
-    const h = loadContent();
+    const h = loadContent({ debug: true });
     h.setChat([{ text: '[SPONSOR] (0:30 – 1:00)', times: [30, 60] }]);
     await h.extension.watchForAnswer(0);
     const callback = [...h.timers.values()].find(timer => timer.delay === 1200).callback;
@@ -140,6 +153,7 @@ test('reset prevents an already queued answer callback from restoring old segmen
     callback();
     assert.equal(h.extension.state.segments.length, 0);
     assert.equal(h.timers.size, 0);
+    assert.equal(h.logs.some(({ level }) => level === 'warn' || level === 'error'), false);
 });
 
 test('missing chat panels and malformed timestamp ranges do not create segments', () => {
