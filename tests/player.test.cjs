@@ -111,7 +111,7 @@ test('entering fullscreen can start playback and listeners are bound once', () =
     assert.equal(h.document.listeners.get('fullscreenchange').size, 1);
 });
 
-test('skip controls remain usable after leaving fullscreen', () => {
+test('cancel controls remain usable after leaving fullscreen', async () => {
     const h = loadContent();
     const video = h.video({ currentTime: 45 });
     h.extension.bindPlayerEvents(video);
@@ -123,7 +123,8 @@ test('skip controls remain usable after leaving fullscreen', () => {
     h.document.dispatchEvent(new h.Event('fullscreenchange'));
     video.dispatchEvent(new h.Event('timeupdate'));
     h.extension.button.click();
-    assert.equal(video.currentTime, 60);
+    await h.advance(5000);
+    assert.equal(video.currentTime, 45);
 });
 
 test('source changes cancel old work and reset segments', () => {

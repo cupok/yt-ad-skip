@@ -5,13 +5,13 @@ const { loadContent } = require('./helpers/content.cjs');
 test('YouTube language takes priority over browser preferences', () => {
     const { extension } = loadContent({ pageLanguage: 'uk-UA', languages: ['ru', 'en'] });
     assert.equal(extension.language, 'uk-UA');
-    assert.equal(extension.getTranslations().skip, 'Пропустити сегмент');
+    assert.equal(extension.getTranslations().cancelAutoSkip, 'Скасувати автопропуск');
 });
 
 test('language detection normalizes region tags and skips unsupported preferences', () => {
     const { extension } = loadContent({ pageLanguage: 'de', languages: ['fr', 'ru_RU', 'en'] });
     assert.equal(extension.language, 'ru-RU');
-    assert.equal(extension.getTranslations().skip, 'Пропустить сегмент');
+    assert.equal(extension.getTranslations().cancelAutoSkip, 'Отменить автопропуск');
 });
 
 test('malformed and missing preferences fall back safely', () => {
@@ -26,10 +26,10 @@ test('detection reads updated YouTube language after navigation', () => {
     assert.equal(extension.detectUserLanguage(), 'ru');
 });
 
-for (const [language, skip, sponsor] of [
-    ['en-US', 'Skip segment', 'Sponsor segment'],
-    ['uk-UA', 'Пропустити сегмент', 'Спонсорський сегмент'],
-    ['ru-RU', 'Пропустить сегмент', 'Спонсорский сегмент'],
+for (const [language, cancelText, sponsor] of [
+    ['en-US', 'Cancel auto-skip (5s)', 'Sponsor segment'],
+    ['uk-UA', 'Скасувати автопропуск (5 с)', 'Спонсорський сегмент'],
+    ['ru-RU', 'Отменить автопропуск (5 с)', 'Спонсорский сегмент'],
 ]) {
     test(`${language}: prompt requests user language with a stable sponsor marker`, () => {
         const { extension } = loadContent({ pageLanguage: language });
@@ -54,18 +54,18 @@ for (const [language, skip, sponsor] of [
         ]));
     });
 
-    test(`${language}: skip button uses the user's language and preserves seeking`, () => {
+    test(`${language}: cancel button uses the user's language and leaves playback in place`, () => {
         const { extension, HTMLMediaElement } = loadContent({ pageLanguage: language });
         const video = new HTMLMediaElement();
         video.currentTime = 45;
         video.duration = 600;
         extension.setSegments([{ start: 30, end: 60 }]);
         extension.updateSkipButton(video);
-        assert.equal(extension.button.textContent, `${skip} → 1:00`);
+        assert.equal(extension.button.textContent, cancelText);
         assert.equal(extension.button.lang, language);
         assert.equal(extension.button.style.display, 'block');
         extension.button.onclick();
-        assert.equal(video.currentTime, 60);
+        assert.equal(video.currentTime, 45);
         assert.equal(extension.button.style.display, 'none');
     });
 }
@@ -149,13 +149,15 @@ test('disabling auto-skip in settings cancels a pending skip on an open tab', ()
     extension.setActivePlayer(video);
     extension.setSegments([{ start: 30, end: 60 }]);
     extension.updateSkipButton(video);
-    assert.ok([...timers.values()].some(({ delay }) => delay === 5000));
+    assert.ok([...timers.values()].some(({ delay }) => delay === 1000));
     changeSettings({ autoSkipDelay: 0 });
     assert.equal(timers.size, 0);
     assert.equal(video.currentTime, 45);
-    assert.equal(extension.button.style.display, 'block');
+    assert.equal(extension.button.style.display, 'none');
     changeSettings({ autoSkipDelay: 3000 });
-    assert.ok([...timers.values()].some(({ delay }) => delay === 3000));
+    assert.ok([...timers.values()].some(({ delay }) => delay === 1000));
+    assert.equal(extension.button.textContent, 'Cancel auto-skip (3s)');
+    assert.equal(extension.button.style.display, 'block');
 });
 
 test('changes use the local settings key and leave unrelated timers running', () => {

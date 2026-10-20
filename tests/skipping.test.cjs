@@ -11,7 +11,7 @@ function setup(options) {
 }
 
 for (const [time, visible] of [[29.99, false], [30, true], [59.99, true], [60, false], [90, true], [120, false]]) {
-    test(`skip control is ${visible ? 'visible' : 'hidden'} at ${time} seconds`, () => {
+    test(`cancel control is ${visible ? 'visible' : 'hidden'} at ${time} seconds`, () => {
         const h = setup();
         h.player.currentTime = time;
         h.extension.updateSkipButton(h.player);
@@ -19,16 +19,17 @@ for (const [time, visible] of [[29.99, false], [30, true], [59.99, true], [60, f
     });
 }
 
-test('the skip button updates progress and reuses the existing button', () => {
+test('the cancel button shows countdown progress and reuses the existing button', async () => {
     const h = setup();
     h.player.currentTime = 30;
     h.extension.updateSkipButton(h.player);
     const button = h.extension.button;
     assert.ok(button.style.background.includes('0%'));
-    h.player.currentTime = 45;
+    await h.advance(2500);
     h.extension.updateSkipButton(h.player);
     assert.equal(h.extension.button, button);
     assert.ok(button.style.background.includes('50%'));
+    assert.equal(button.textContent, 'Cancel auto-skip (3s)');
     assert.equal(h.container.children.length, 1);
 });
 
@@ -39,33 +40,37 @@ test('the alternate progress style fills the remaining part', () => {
     assert.ok(h.extension.button.style.background.includes('100%'));
 });
 
-test('manual skipping cancels auto-skip and uses the currently visible segment', () => {
+test('clicking cancel leaves the current segment playing and stops its countdown', async () => {
     const h = setup();
     h.extension.updateSkipButton(h.player);
     h.player.currentTime = 100;
     h.extension.updateSkipButton(h.player);
     h.extension.button.click();
-    assert.equal(h.player.currentTime, 120);
+    assert.equal(h.player.currentTime, 100);
     assert.equal(h.extension.button.style.display, 'none');
     assert.equal(h.timers.size, 0);
+    h.extension.updateSkipButton(h.player);
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 100);
+    assert.equal(h.extension.button.style.display, 'none');
 });
 
-test('seeking is clamped to the video duration', () => {
+test('automatic seeking is clamped to the video duration', async () => {
     const h = setup();
     h.player.duration = 50;
     h.extension.updateSkipButton(h.player);
-    assert.equal(h.extension.button.textContent, 'Skip segment → 0:50');
-    h.extension.button.click();
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
+    await h.advance(5000);
     assert.equal(h.player.currentTime, 50);
 });
 
-test('long segment labels format hours and zero-padded minutes and seconds', () => {
+test('cancel labels show the countdown rather than the segment end time', () => {
     const h = setup();
     h.player.duration = 7200;
     h.player.currentTime = 3600;
     h.extension.setSegments([{ start: 3500, end: 3665 }]);
     h.extension.updateSkipButton(h.player);
-    assert.equal(h.extension.button.textContent, 'Skip segment → 1:01:05');
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
 });
 
 test('a disconnected button is recreated and missing player containers are tolerated', () => {
@@ -184,4 +189,124 @@ test('shortcuts can find the current video when no active player is cached', () 
     h.extension.bindShortcuts();
     h.document.dispatchEvent(new h.Event('keydown', { altKey: true, code: 'ArrowRight' }));
     assert.equal(h.player.currentTime, 60);
+});
+
+test('countdown text updates every second without player events and expires into a skip', async () => {
+    const h = setup();
+    h.extension.updateSkipButton(h.player);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
+    await h.advance(999);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
+    await h.advance(1);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (4s)');
+    for (const remaining of [3, 2, 1]) {
+        await h.advance(1000);
+        assert.equal(h.extension.button.textContent, `Cancel auto-skip (${remaining}s)`);
+        assert.equal(h.player.currentTime, 45);
+    }
+    await h.advance(1000);
+    assert.equal(h.player.currentTime, 60);
+    assert.equal(h.extension.button.style.display, 'none');
+    assert.equal(h.timers.size, 0);
+});
+
+test('the saved cancellation duration controls how long the button is shown', async () => {
+    const h = setup({ storedSettings: { autoSkipDelay: 7000 } });
+    await h.extension.loadSettings();
+    h.extension.updateSkipButton(h.player);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (7s)');
+    await h.advance(6999);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (1s)');
+    assert.equal(h.extension.button.style.display, 'block');
+    assert.equal(h.player.currentTime, 45);
+    await h.advance(1);
+    assert.equal(h.extension.button.style.display, 'none');
+    assert.equal(h.player.currentTime, 60);
+});
+
+test('zero duration disables auto-skip and does not create a cancel button', async () => {
+    const h = setup({ storedSettings: { autoSkipDelay: 0 } });
+    await h.extension.loadSettings();
+    h.extension.updateSkipButton(h.player);
+    assert.equal(h.extension.button, null);
+    assert.equal(h.timers.size, 0);
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 45);
+});
+
+test('canceling remains effective through player events and re-entering the same segment', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.updateSkipButton(h.player);
+    h.extension.button.click();
+    for (let i = 0; i < 10; i++) h.player.dispatchEvent(new h.Event('timeupdate'));
+    h.player.currentTime = 75;
+    h.player.dispatchEvent(new h.Event('seeking'));
+    h.player.currentTime = 45;
+    h.player.dispatchEvent(new h.Event('seeked'));
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 45);
+    assert.equal(h.extension.button.style.display, 'none');
+    assert.equal(h.timers.size, 0);
+});
+
+test('canceling one segment does not prevent auto-skipping another segment', async () => {
+    const h = setup();
+    h.extension.updateSkipButton(h.player);
+    h.extension.button.click();
+    h.player.currentTime = 100;
+    h.extension.updateSkipButton(h.player);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
+    assert.equal(h.extension.button.style.display, 'block');
+    await h.advance(5000);
+    assert.equal(h.player.currentTime, 120);
+});
+
+test('navigation clears per-video cancellation choices', async () => {
+    const h = setup();
+    h.extension.updateSkipButton(h.player);
+    h.extension.button.click();
+    h.extension.reset();
+    h.extension.setSegments([{ start: 30, end: 60 }]);
+    h.extension.updateSkipButton(h.player);
+    assert.equal(h.extension.button.style.display, 'block');
+    await h.advance(5000);
+    assert.equal(h.player.currentTime, 60);
+});
+
+test('changing duration does not undo a user cancellation', async () => {
+    const h = setup();
+    h.extension.bindSettingsChanges();
+    h.extension.updateSkipButton(h.player);
+    h.extension.button.click();
+    h.changeSettings({ autoSkipDelay: 7000 });
+    assert.equal(h.extension.button.style.display, 'none');
+    assert.equal(h.timers.size, 0);
+    await h.advance(7000);
+    assert.equal(h.player.currentTime, 45);
+});
+
+test('stale ticks and button handlers cannot affect a replacement countdown', async () => {
+    const h = setup();
+    h.extension.bindSettingsChanges();
+    h.extension.updateSkipButton(h.player);
+    const oldTick = [...h.timers.values()][0].callback;
+    const oldClick = h.extension.button.onclick;
+    h.changeSettings({ autoSkipDelay: 7000 });
+    oldTick();
+    oldClick();
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (7s)');
+    assert.equal(h.timers.size, 1);
+    await h.advance(7000);
+    assert.equal(h.player.currentTime, 60);
+});
+
+test('keyboard shortcuts can still skip a segment after its auto-skip was canceled', () => {
+    const h = setup();
+    h.extension.bindShortcuts();
+    h.extension.updateSkipButton(h.player);
+    h.extension.button.click();
+    h.document.dispatchEvent(new h.Event('keydown', { altKey: true, code: 'ArrowRight' }));
+    assert.equal(h.player.currentTime, 60);
+    assert.equal(h.timers.size, 0);
 });

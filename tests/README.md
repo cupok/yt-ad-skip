@@ -14,10 +14,10 @@ independent of network access, real waiting, and an installed extension.
 | Suite | Behavior covered |
 | --- | --- |
 | `content.test.cjs` | English, Ukrainian, and Russian; language fallbacks; sponsor markers; existing answer exclusion; saved settings and live updates |
-| `fundraising.test.cjs` | Fundraising prompts and labels in all three languages; mixed sponsor/fundraising answers; history exclusion; invalid ranges; manual, automatic, and keyboard skipping; response-driven chat closure |
+| `fundraising.test.cjs` | Fundraising prompts and labels in all three languages; mixed sponsor/fundraising answers; history exclusion; invalid ranges; auto-skip cancellation; automatic and keyboard skipping; response-driven chat closure |
 | `player.test.cjs` | Existing and future video discovery; fullscreen and readiness gates; short and live videos; listener deduplication; source changes; navigation and cleanup; initialization |
 | `chat.test.cjs` | Element waiting and timeouts; chat retries; text and editable inputs; prompt submission; streamed answer debouncing; stale async work; timestamp parsing; delayed chat closure; complete playback-to-skip flow |
-| `skipping.test.cjs` | Segment boundaries; progress fill; button reuse and recreation; manual and automatic skips; duration clamping; timer cancellation; Mac and Windows shortcuts; editable focus protection |
+| `skipping.test.cjs` | Segment boundaries; live countdown and progress; cancel-button reuse and recreation; cancellation per segment and video; configured duration; stale timer protection; automatic skips; duration clamping; Mac and Windows shortcuts; editable focus protection |
 | `logging.test.cjs` | Saved and live debug toggles; independent file logging; levels and metadata; safe serialization; size/depth limits; delivery failures; throttling; global error capture |
 | `background.test.cjs` | Log batching and persistence; line and byte retention caps; overlapping writes; storage failures and recovery; export flushing; download failures; lifecycle diagnostics |
 | `settings.test.cjs` | Configuration validation and defaults; manifest wiring; explicit log export |

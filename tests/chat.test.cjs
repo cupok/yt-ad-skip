@@ -219,7 +219,7 @@ test('playback can open chat, submit a prompt, parse a streamed answer, skip, an
     h.setChat([{ text: '[SPONSOR] Спонсорский сегмент: (0:30 – 1:00)', times: [30, 60] }]);
     h.observers.find(observer => observer.target === chat).notify([{ type: 'childList' }]);
     await h.advance(1200);
-    assert.equal(h.extension.button.textContent, 'Пропустить сегмент → 1:00');
+    assert.equal(h.extension.button.textContent, 'Отменить автопропуск (5 с)');
     await h.advance(5000);
     assert.equal(video.currentTime, 60);
     assert.equal(h.extension.button.style.display, 'none');

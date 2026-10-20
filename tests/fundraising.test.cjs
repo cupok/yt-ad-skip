@@ -99,7 +99,21 @@ test('fundraising still requires two valid timestamps in ascending order', () =>
     assert.equal(h.extension.parseSegments().length, 0);
 });
 
-for (const mode of ['button', 'automatic', 'keyboard shortcut']) {
+test('fundraising auto-skips can be canceled with the button', async () => {
+    const h = loadContent();
+    const player = h.video({ currentTime: 45 });
+    h.setChat([{ text: '[FUNDRAISING] Donation drive (0:30 – 1:00)', times: [30, 60] }]);
+    h.extension.setSegments(h.extension.parseSegments());
+    h.extension.updateSkipButton(player);
+    h.extension.button.click();
+    h.extension.updateSkipButton(player);
+    await h.advance(10000);
+    assert.equal(player.currentTime, 45);
+    assert.equal(h.extension.button.style.display, 'none');
+    assert.equal(h.timers.size, 0);
+});
+
+for (const mode of ['automatic', 'keyboard shortcut']) {
     test(`fundraising segments can be skipped with the ${mode}`, async () => {
         const h = loadContent();
         const player = h.video({ currentTime: 45 });
@@ -107,7 +121,6 @@ for (const mode of ['button', 'automatic', 'keyboard shortcut']) {
         h.setChat([{ text: '[FUNDRAISING] Donation drive (0:30 – 1:00)', times: [30, 60] }]);
         h.extension.setSegments(h.extension.parseSegments());
         h.extension.updateSkipButton(player);
-        if (mode === 'button') h.extension.button.click();
         if (mode === 'automatic') await h.advance(5000);
         if (mode === 'keyboard shortcut') {
             h.extension.bindShortcuts();

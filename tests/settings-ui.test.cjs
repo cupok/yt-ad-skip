@@ -2,10 +2,10 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { loadSettingsUI } = require('./helpers/settings-ui.cjs');
 
-for (const [language, title, firstLabel] of [
-    ['en-GB', 'Settings', 'Open chat after'],
-    ['uk-UA', 'Налаштування', 'Відкрити чат через'],
-    ['ru-RU', 'Настройки', 'Открыть чат через'],
+for (const [language, title, firstLabel, cancelDurationLabel] of [
+    ['en-GB', 'Settings', 'Open chat after', 'Cancel button duration'],
+    ['uk-UA', 'Налаштування', 'Відкрити чат через', 'Час показу кнопки скасування'],
+    ['ru-RU', 'Настройки', 'Открыть чат через', 'Время показа кнопки отмены'],
 ]) {
     test(`${language}: settings renders localized headings and all seven delay controls`, () => {
         const h = loadSettingsUI({ languages: [language] });
@@ -16,6 +16,7 @@ for (const [language, title, firstLabel] of [
         assert.equal(h.mainFields.children.length, 3);
         assert.equal(h.advancedFields.children.length, 4);
         assert.equal(h.mainFields.children[0].querySelector('label').textContent, firstLabel);
+        assert.equal(h.input('autoSkipDelay').parentElement.querySelector('label').textContent, cancelDurationLabel);
         assert.equal(h.input('debug').type, 'checkbox');
         assert.equal(h.input('debug').checked, true);
         for (const [key, field] of Object.entries(h.settings.FIELDS)) {

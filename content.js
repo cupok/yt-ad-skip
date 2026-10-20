@@ -1,8 +1,8 @@
 (() => {
 // Config
-const FILL_GROWS = true; // skip button animation style
-const FILL_COLOR = 'rgba(60,140,255,0.85)'; // played portion
-const TRACK_COLOR = 'rgba(0,0,0,0.8)'; // remaining portion
+const FILL_GROWS = true; // cancellation countdown animation style
+const FILL_COLOR = 'rgba(60,140,255,0.85)'; // elapsed countdown
+const TRACK_COLOR = 'rgba(0,0,0,0.8)'; // remaining countdown
 const settingsApi = globalThis.YtAdSkipSettings;
 let settings = { ...settingsApi.DEFAULTS };
 
@@ -146,6 +146,8 @@ function getLogState() {
                 enabled: settings.autoSkipDelay > 0,
                 delay: settings.autoSkipDelay,
                 segmentKey: autoSkipSegmentKey,
+                deadline: autoSkipDeadline,
+                canceledSegments: [...canceledAutoSkipSegments],
             },
             fullscreen: {
                 active: Boolean(document.fullscreenElement),
@@ -329,9 +331,9 @@ const chatTimestampItemSelector = '.ytwMarkdownDivTimestamp';
 const SPONSOR_MARKER = '[SPONSOR]';
 const FUNDRAISING_MARKER = '[FUNDRAISING]';
 const TRANSLATIONS = {
-    en: { skip: 'Skip segment', sponsor: 'Sponsor segment', fundraising: 'Fundraising segment', topic: 'Topic' },
-    uk: { skip: 'Пропустити сегмент', sponsor: 'Спонсорський сегмент', fundraising: 'Збір коштів', topic: 'Тема' },
-    ru: { skip: 'Пропустить сегмент', sponsor: 'Спонсорский сегмент', fundraising: 'Сбор средств', topic: 'Тема' },
+    en: { cancelAutoSkip: 'Cancel auto-skip', secondsUnit: 's', sponsor: 'Sponsor segment', fundraising: 'Fundraising segment', topic: 'Topic' },
+    uk: { cancelAutoSkip: 'Скасувати автопропуск', secondsUnit: ' с', sponsor: 'Спонсорський сегмент', fundraising: 'Збір коштів', topic: 'Тема' },
+    ru: { cancelAutoSkip: 'Отменить автопропуск', secondsUnit: ' с', sponsor: 'Спонсорский сегмент', fundraising: 'Сбор средств', topic: 'Тема' },
 };
 const SPONSOR_LABEL_PATTERN = new RegExp(
     `(?:^|[^\\p{L}\\p{N}])(?:${Object.values(TRANSLATIONS).map(({ sponsor }) => sponsor).join('|')})(?=$|[^\\p{L}\\p{N}])`,
@@ -402,6 +404,10 @@ let lastSkipButtonSegmentKey = null;
 let segments = [];
 let autoSkipTimer = null;
 let autoSkipSegmentKey = null;
+let autoSkipStartedAt = null;
+let autoSkipDeadline = null;
+let autoSkipGeneration = 0;
+const canceledAutoSkipSegments = new Set();
 
 let openChatTimer = null;
 let closeTimer = null;
@@ -822,6 +828,7 @@ function getSegmentEnd(segment, video) {
 
 function cancelAutoSkip(reason, details = {}) {
     const hadAutoSkip = Boolean(autoSkipTimer || autoSkipSegmentKey);
+    autoSkipGeneration++;
 
     if (autoSkipTimer) {
         clearTimeout(autoSkipTimer);
@@ -830,6 +837,12 @@ function cancelAutoSkip(reason, details = {}) {
 
     const segmentKey = autoSkipSegmentKey;
     autoSkipSegmentKey = null;
+    autoSkipStartedAt = null;
+    autoSkipDeadline = null;
+    if (skipButton) {
+        skipButton.style.display = 'none';
+    }
+    lastSkipButtonSegmentKey = null;
 
     if (hadAutoSkip) {
         log('autoskip canceled', {
@@ -841,7 +854,7 @@ function cancelAutoSkip(reason, details = {}) {
 }
 
 function scheduleAutoSkip(video, segment, segmentKey) {
-    if (settings.autoSkipDelay <= 0) {
+    if (settings.autoSkipDelay <= 0 || canceledAutoSkipSegments.has(segmentKey)) {
         return;
     }
 
@@ -856,8 +869,11 @@ function scheduleAutoSkip(video, segment, segmentKey) {
     }
 
     const localRunId = runId;
+    const generation = ++autoSkipGeneration;
 
     autoSkipSegmentKey = segmentKey;
+    autoSkipStartedAt = Date.now();
+    autoSkipDeadline = autoSkipStartedAt + settings.autoSkipDelay;
 
     log('autoskip scheduled', {
         localRunId,
@@ -867,7 +883,10 @@ function scheduleAutoSkip(video, segment, segmentKey) {
         currentTime: video.currentTime,
     });
 
-    autoSkipTimer = setTimeout(() => {
+    const tick = () => {
+        if (!isCurrentRun(localRunId) || generation !== autoSkipGeneration) {
+            return;
+        }
         autoSkipTimer = null;
 
         const currentSegment = findCurrentSegment(video);
@@ -875,20 +894,8 @@ function scheduleAutoSkip(video, segment, segmentKey) {
             ? `${currentSegment.start}-${currentSegment.end}`
             : null;
 
-        if (!isCurrentRun(localRunId)) {
-            autoSkipSegmentKey = null;
-            logWarn('autoskip aborted because run is stale', {
-                localRunId,
-                currentRunId: runId,
-                segment,
-                segmentKey,
-            });
-            return;
-        }
-
         if (!(video instanceof HTMLMediaElement) || !video.isConnected) {
-            autoSkipSegmentKey = null;
-            logWarn('autoskip aborted because video is unavailable', {
+            cancelAutoSkip('video-unavailable', {
                 localRunId,
                 segment,
                 segmentKey,
@@ -898,8 +905,7 @@ function scheduleAutoSkip(video, segment, segmentKey) {
         }
 
         if (currentSegmentKey !== segmentKey) {
-            autoSkipSegmentKey = null;
-            log('autoskip skipped because segment is no longer active', {
+            cancelAutoSkip('left-segment', {
                 localRunId,
                 segment,
                 segmentKey,
@@ -907,6 +913,13 @@ function scheduleAutoSkip(video, segment, segmentKey) {
                 currentSegmentKey,
                 currentTime: video.currentTime,
             });
+            return;
+        }
+
+        const remaining = autoSkipDeadline - Date.now();
+        if (remaining > 0) {
+            updateSkipButton(video);
+            autoSkipTimer = setTimeout(tick, Math.min(1000, remaining));
             return;
         }
 
@@ -920,14 +933,8 @@ function scheduleAutoSkip(video, segment, segmentKey) {
             currentTimeBefore: video.currentTime,
         });
 
-        autoSkipSegmentKey = null;
+        cancelAutoSkip('completed');
         video.currentTime = segmentEnd;
-
-        if (skipButton) {
-            skipButton.style.display = 'none';
-        }
-
-        lastSkipButtonSegmentKey = null;
 
         log('autoskip completed seek', {
             localRunId,
@@ -935,7 +942,9 @@ function scheduleAutoSkip(video, segment, segmentKey) {
             segmentKey,
             currentTimeAfter: video.currentTime,
         });
-    }, settings.autoSkipDelay);
+    };
+
+    autoSkipTimer = setTimeout(tick, Math.min(1000, settings.autoSkipDelay));
 }
 
 function getStartBlockReasons(video) {
@@ -1528,19 +1537,7 @@ function parseSegments() {
     return found;
 }
 
-// Skip button
-function format(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = String(Math.floor(seconds % 60)).padStart(2, '0');
-
-    if (hours > 0) {
-        return `${hours}:${String(minutes).padStart(2, '0')}:${secs}`;
-    }
-
-    return `${minutes}:${secs}`;
-}
-
+// Auto-skip cancellation button
 function updateSkipButton(video) {
     if (!(video instanceof HTMLMediaElement)) {
         logWarn('updateSkipButton called without a valid video', video);
@@ -1589,6 +1586,10 @@ function updateSkipButton(video) {
     }
 
     const segmentKey = `${segment.start}-${segment.end}`;
+    if (settings.autoSkipDelay <= 0 || canceledAutoSkipSegments.has(segmentKey)) {
+        cancelAutoSkip('disabled-or-canceled', { segmentKey });
+        return;
+    }
     scheduleAutoSkip(video, segment, segmentKey);
 
     if (!skipButton) {
@@ -1620,8 +1621,7 @@ function updateSkipButton(video) {
         });
     }
 
-    const segmentEnd = getSegmentEnd(segment, video);
-    let progress = (video.currentTime - segment.start) / (segmentEnd - segment.start);
+    let progress = (Date.now() - autoSkipStartedAt) / (autoSkipDeadline - autoSkipStartedAt);
     progress = Math.min(1, Math.max(0, progress));
 
     const percent = (FILL_GROWS ? progress : 1 - progress) * 100;
@@ -1629,7 +1629,9 @@ function updateSkipButton(video) {
     skipButton.style.background = `linear-gradient(to right, ${FILL_COLOR} ${percent}%, ${TRACK_COLOR} ${percent}%)`;
     skipButton.lang = userLanguage;
     skipButton.dir = 'auto';
-    skipButton.textContent = `${getTranslations().skip} → ${format(segmentEnd)}`;
+    const remainingSeconds = Math.max(0, Math.ceil((autoSkipDeadline - Date.now()) / 1000));
+    const { cancelAutoSkip: cancelLabel, secondsUnit } = getTranslations();
+    skipButton.textContent = `${cancelLabel} (${remainingSeconds}${secondsUnit})`;
 
     const previousDisplay = skipButton.style.display;
     skipButton.style.display = 'block';
@@ -1647,28 +1649,18 @@ function updateSkipButton(video) {
 
     lastSkipButtonSegmentKey = segmentKey;
 
-    // Keep this simple: always use the currently visible segment.
+    const buttonRunId = runId;
+    const buttonGeneration = autoSkipGeneration;
     skipButton.onclick = () => {
-        log('skip button clicked', {
-            segment,
-            segmentEnd,
-            currentTimeBefore: video.currentTime,
-        });
+        if (!isCurrentRun(buttonRunId) || autoSkipSegmentKey !== segmentKey || buttonGeneration !== autoSkipGeneration) {
+            return;
+        }
 
-        cancelAutoSkip('manual-skip-button', {
+        canceledAutoSkipSegments.add(segmentKey);
+        cancelAutoSkip('user-canceled', {
             segment,
             segmentKey,
             currentTime: video.currentTime,
-        });
-
-        video.currentTime = segmentEnd;
-        skipButton.style.display = 'none';
-        lastSkipButtonSegmentKey = null;
-
-        log('skip button completed seek', {
-            segment,
-            segmentEnd,
-            currentTimeAfter: video.currentTime,
         });
     };
 }
@@ -1782,6 +1774,7 @@ function reset() {
     ignoredTimestampLines = new Set();
 
     clearTimers();
+    canceledAutoSkipSegments.clear();
 
     if (skipButton) {
         log('removing skip button during reset', {
