@@ -1,4 +1,5 @@
 (() => {
+    // Preserve the storage key so existing settings survive the rename.
     const STORAGE_KEY = 'ytAutoTimestampsSettings';
     const FIELDS = Object.freeze({
         chatOpenDelay: { default: 1000, min: 0, max: 600000 },
@@ -24,5 +25,5 @@
         }));
     }
 
-    globalThis.YtAutoTimestampsSettings = Object.freeze({ STORAGE_KEY, FIELDS, DEFAULTS, normalize });
+    globalThis.YtAdSkipSettings = Object.freeze({ STORAGE_KEY, FIELDS, DEFAULTS, normalize });
 })();

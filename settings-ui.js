@@ -1,6 +1,6 @@
 /* global chrome */
 (() => {
-    const { STORAGE_KEY, FIELDS, DEFAULTS, normalize } = globalThis.YtAutoTimestampsSettings;
+    const { STORAGE_KEY, FIELDS, DEFAULTS, normalize } = globalThis.YtAdSkipSettings;
     const TRANSLATIONS = {
         en: {
             title: 'Settings', intro: 'Adjust the timing. All values are in seconds.',
@@ -61,7 +61,7 @@
     const exportButton = document.querySelector('#export');
 
     document.documentElement.lang = language;
-    document.title = `YT Auto Timestamps · ${messages.title}`;
+    document.title = `YT Ad Skip · ${messages.title}`;
     document.querySelectorAll('[data-i18n]').forEach(element => {
         element.textContent = messages[element.dataset.i18n];
     });
@@ -136,7 +136,7 @@
     document.querySelector('#reset').addEventListener('click', () => save({ ...DEFAULTS }, messages.restored));
     exportButton.addEventListener('click', () => {
         exportButton.disabled = true;
-        chrome.runtime.sendMessage({ type: 'YT_AUTO_TIMESTAMPS_EXPORT_LOG' }, response => {
+        chrome.runtime.sendMessage({ type: 'YT_AD_SKIP_EXPORT_LOG' }, response => {
             const error = chrome.runtime.lastError;
             exportButton.disabled = false;
             showStatus(error || !response?.ok ? messages.exportError : messages.exported, Boolean(error || !response?.ok));

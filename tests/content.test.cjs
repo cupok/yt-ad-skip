@@ -117,7 +117,7 @@ globalThis.extension = {
     }
 
     function changeSettings(value, area = 'local') {
-        const key = context.YtAutoTimestampsSettings.STORAGE_KEY;
+        const key = context.YtAdSkipSettings.STORAGE_KEY;
         settingsListeners.forEach(listener => listener({ [key]: { newValue: value } }, area));
     }
 

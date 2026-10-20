@@ -3,7 +3,7 @@
 const FILL_GROWS = true; // skip button animation style
 const FILL_COLOR = 'rgba(60,140,255,0.85)'; // played portion
 const TRACK_COLOR = 'rgba(0,0,0,0.8)'; // remaining portion
-const settingsApi = globalThis.YtAutoTimestampsSettings;
+const settingsApi = globalThis.YtAdSkipSettings;
 let settings = { ...settingsApi.DEFAULTS };
 
 const BUTTON_STYLE = {
@@ -23,8 +23,8 @@ const BUTTON_STYLE = {
 // Debug
 const DEBUG = true;
 const LOG_TO_FILE = true;
-const LOG_MESSAGE_TYPE = 'YT_AUTO_TIMESTAMPS_LOG';
-const LOG_CONSOLE_PREFIX = '[yt-auto-timestamps]';
+const LOG_MESSAGE_TYPE = 'YT_AD_SKIP_LOG';
+const LOG_CONSOLE_PREFIX = '[yt-ad-skip]';
 const LOG_THROTTLE_MS = 10000;
 const CHAT_OPEN_MAX_ATTEMPTS = 3;
 
@@ -1982,7 +1982,7 @@ async function init() {
     bindSettingsChanges();
 
     log('init started', {
-        manifestHint: 'YT Auto Timestamps',
+        manifestHint: 'YT Ad Skip',
         pageUrl: window.location.href,
         readyState: document.readyState,
         language: userLanguage,

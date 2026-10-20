@@ -1,10 +1,11 @@
 /* global chrome */
 (() => {
 
-const LOG_MESSAGE_TYPE = 'YT_AUTO_TIMESTAMPS_LOG';
+const LOG_MESSAGE_TYPE = 'YT_AD_SKIP_LOG';
+// Preserve existing log history across the rename.
 const LOG_STORAGE_KEY = 'ytAutoTimestampsLogLines';
 const LOG_UPDATED_AT_KEY = 'ytAutoTimestampsLogUpdatedAt';
-const LOG_FILE_NAME = 'yt-auto-timestamps.log';
+const LOG_FILE_NAME = 'yt-ad-skip.log';
 
 const MAX_LOG_LINES = 1000;
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
@@ -154,7 +155,7 @@ async function flushPendingLogs() {
         await writePromise;
         callbacks.forEach(({ resolve }) => resolve(undefined));
     } catch (error) {
-        console.warn('[yt-auto-timestamps:background] failed to write log', error);
+        console.warn('[yt-ad-skip:background] failed to write log', error);
         callbacks.forEach(({ reject }) => reject(error));
     }
 }
@@ -188,7 +189,7 @@ async function flushLogFile() {
             : [];
         const updatedAt = result[LOG_UPDATED_AT_KEY] || new Date().toISOString();
         const body = [
-            '# YT Auto Timestamps log',
+            '# YT Ad Skip log',
             `# Last updated: ${updatedAt}`,
             `# Lines retained: ${lines.length}/${MAX_LOG_LINES}`,
             `# Size cap: ${MAX_LOG_BYTES} bytes`,
@@ -211,11 +212,11 @@ async function flushLogFile() {
 }
 
 chromeApi['runtime']['onMessage']['addListener']((message, _sender, sendResponse) => {
-    if (message?.type === 'YT_AUTO_TIMESTAMPS_EXPORT_LOG') {
+    if (message?.type === 'YT_AD_SKIP_EXPORT_LOG') {
         flushLogFile()
             .then(() => sendResponse({ ok: true }))
             .catch((error) => {
-                console.warn('[yt-auto-timestamps:background] failed to export log file', error);
+                console.warn('[yt-ad-skip:background] failed to export log file', error);
                 sendResponse({ ok: false });
             });
         return true;

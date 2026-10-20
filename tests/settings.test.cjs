@@ -8,7 +8,7 @@ const root = path.join(__dirname, '..');
 const settingsSource = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
 const context = vm.createContext({});
 vm.runInContext(settingsSource, context);
-const { DEFAULTS, FIELDS, normalize } = context.YtAutoTimestampsSettings;
+const { DEFAULTS, FIELDS, normalize } = context.YtAdSkipSettings;
 
 test('missing, malformed, and partial stored settings preserve existing defaults', () => {
     for (const input of [undefined, null, 'bad data', []]) {
@@ -60,10 +60,10 @@ test('logs are exported only after an explicit export request', async () => {
     assert.equal(downloads.length, 0);
     assert.equal(listeners.message({ type: 'unrelated' }, {}, () => {}), false);
     const response = await new Promise(resolve => {
-        assert.equal(listeners.message({ type: 'YT_AUTO_TIMESTAMPS_EXPORT_LOG' }, {}, resolve), true);
+        assert.equal(listeners.message({ type: 'YT_AD_SKIP_EXPORT_LOG' }, {}, resolve), true);
     });
     assert.equal(response.ok, true);
     assert.equal(downloads.length, 1);
-    assert.equal(downloads[0].filename, 'yt-auto-timestamps.log');
+    assert.equal(downloads[0].filename, 'yt-ad-skip.log');
     assert.ok(decodeURIComponent(downloads[0].url).includes('test log line'));
 });

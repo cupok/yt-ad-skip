@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "YT Auto Timestamps",
+  "name": "YT Ad Skip",
   "version": "1.0",
-  "description": "Triggers AI chat to load generate timestamps of the current video",
+  "description": "Automatically skips sponsored segments on YouTube using AI-generated timestamps.",
   "permissions": ["downloads", "storage"],
   "action": {
-    "default_title": "YT Auto Timestamps settings",
+    "default_title": "YT Ad Skip settings",
     "default_popup": "settings.html"
   },
   "options_ui": {
