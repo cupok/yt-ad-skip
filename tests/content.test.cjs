@@ -93,7 +93,7 @@ test('an empty answer logs at info level and keeps watching for the response', a
     setChat([]);
     await extension.watchForAnswer(0);
     runTimers(1200);
-    assert.ok(logs.some(({ level, args }) => level === 'log' && args[1] === 'answer parse produced no sponsor segments'));
+    assert.ok(logs.some(({ level, args }) => level === 'log' && args[1] === 'answer parse produced no skippable segments'));
     assert.equal(logs.some(({ level }) => level === 'warn' || level === 'error'), false);
     assert.equal(observers[0].disconnected, false);
     assert.ok([...timers.values()].some(({ delay }) => delay === 30000));

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YT Ad Skip",
   "version": "1.0",
-  "description": "Automatically skips sponsored segments on YouTube using AI-generated timestamps.",
+  "description": "Automatically skips sponsor and fundraising segments on YouTube using AI-generated timestamps.",
   "permissions": ["downloads", "storage"],
   "action": {
     "default_title": "YT Ad Skip settings",

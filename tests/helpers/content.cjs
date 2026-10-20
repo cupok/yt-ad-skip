@@ -62,8 +62,8 @@ function loadContent({ pageLanguage = '', languages = [], language = '', debug =
         .replace('const FILL_GROWS = true;', `const FILL_GROWS = ${String(fillGrows).padEnd(5)};`)
         .replace(init, `
 globalThis.extension = {
-    detectUserLanguage, getTranslations, getTimestampPrompt, isSponsorLine,
-    parseSegments, collectExistingSponsorLines, updateSkipButton, watchForAnswer,
+    detectUserLanguage, getTranslations, getTimestampPrompt, isSponsorLine, isSkippableLine,
+    parseSegments, collectExistingSkipLines, updateSkipButton, watchForAnswer,
     loadSettings, bindSettingsChanges, timestamps, scheduleChatClose, closeChat,
     waitForElement, sendPrompt, setTextInputValue, getStartBlockReasons,
     bindPlayerEvents, bindCurrentOrFutureVideo, bindFullscreenChange,
@@ -75,7 +75,7 @@ globalThis.extension = {
     get state() { return { runId, started, currentVideoSrc, activePlayer, segments, chatOpenAttemptCount }; },
     setSegments(value) { segments = value; },
     setActivePlayer(value) { activePlayer = value; },
-    ignoreExistingLines() { ignoredSponsorLines = collectExistingSponsorLines(); },
+    ignoreExistingLines() { ignoredSkipLines = collectExistingSkipLines(); },
 };
 })();`), context, { filename: path.join(root, 'content.js') });
     context.extension.settings.debug = debug;

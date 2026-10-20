@@ -327,13 +327,18 @@ const chatTimestampItemSelector = '.ytwMarkdownDivTimestamp';
 
 // Language follows YouTube's UI, then the browser's preferred language.
 const SPONSOR_MARKER = '[SPONSOR]';
+const FUNDRAISING_MARKER = '[FUNDRAISING]';
 const TRANSLATIONS = {
-    en: { skip: 'Skip segment', sponsor: 'Sponsor segment', topic: 'Topic' },
-    uk: { skip: 'Пропустити сегмент', sponsor: 'Спонсорський сегмент', topic: 'Тема' },
-    ru: { skip: 'Пропустить сегмент', sponsor: 'Спонсорский сегмент', topic: 'Тема' },
+    en: { skip: 'Skip segment', sponsor: 'Sponsor segment', fundraising: 'Fundraising segment', topic: 'Topic' },
+    uk: { skip: 'Пропустити сегмент', sponsor: 'Спонсорський сегмент', fundraising: 'Збір коштів', topic: 'Тема' },
+    ru: { skip: 'Пропустить сегмент', sponsor: 'Спонсорский сегмент', fundraising: 'Сбор средств', topic: 'Тема' },
 };
 const SPONSOR_LABEL_PATTERN = new RegExp(
     `(?:^|[^\\p{L}\\p{N}])(?:${Object.values(TRANSLATIONS).map(({ sponsor }) => sponsor).join('|')})(?=$|[^\\p{L}\\p{N}])`,
+    'iu'
+);
+const FUNDRAISING_LABEL_PATTERN = new RegExp(
+    `^(?:[-*•]\\s*)?(?:${Object.values(TRANSLATIONS).map(({ fundraising }) => fundraising).join('|')})(?=$|[^\\p{L}\\p{N}])`,
     'iu'
 );
 
@@ -374,13 +379,16 @@ function getTranslations(language = userLanguage) {
 }
 
 function getTimestampPrompt() {
-    const { sponsor, topic } = getTranslations();
+    const { sponsor, fundraising, topic } = getTranslations();
 
     return `List the video's key timestamps. Write all topic descriptions in the language with BCP 47 tag "${userLanguage}", regardless of the video's language.
-Use strictly this format, keeping the marker ${SPONSOR_MARKER} exactly as written:
+Also identify sponsor segments, paid advertisements, and fundraising or donation appeals, with start and end timestamps for each.
+Use strictly this format, keeping the markers ${SPONSOR_MARKER} and ${FUNDRAISING_MARKER} exactly as written:
 - (TIME) ${topic}.
 - ${SPONSOR_MARKER} ${sponsor}: (START – END) ${topic}.
+- ${FUNDRAISING_MARKER} ${fundraising}: (START – END) ${topic}.
 Only use ${SPONSOR_MARKER} for clear sponsor or paid advertisement segments. Do not use it for ordinary topics or statements that there are no sponsors.
+Only use ${FUNDRAISING_MARKER} for explicit requests to donate or raise money, including charity appeals and donation drives. Do not use it for ordinary discussions of fundraising or statements that no donations are requested.
 Use timestamps with ASCII digits in M:SS or H:MM:SS format.`;
 }
 
@@ -415,9 +423,9 @@ const boundPlayers = new WeakSet();
 // Used to prevent old async work from affecting a new video.
 let runId = 0;
 
-// Stores sponsor lines that existed before our prompt.
+// Stores skippable lines that existed before our prompt.
 // This helps avoid parsing an old answer from a previous run.
-let ignoredSponsorLines = new Set();
+let ignoredSkipLines = new Set();
 let ignoredTimestampLines = new Set();
 
 // Helpers
@@ -576,12 +584,12 @@ function clearAnswerWatcher() {
     }
 }
 
-function collectExistingSponsorLines() {
+function collectExistingSkipLines() {
     const lines = new Set();
     const chat = document.querySelector(chatSelector);
 
     if (!chat) {
-        log('collectExistingSponsorLines skipped because chat is missing', {
+        log('collectExistingSkipLines skipped because chat is missing', {
             selector: chatSelector,
         });
         return lines;
@@ -590,12 +598,12 @@ function collectExistingSponsorLines() {
     chat.querySelectorAll('li, p').forEach((node) => {
         const text = normalizeText(node.textContent || '');
 
-        if (isSponsorLine(text)) {
+        if (isSkippableLine(text)) {
             lines.add(text);
         }
     });
 
-    log('collected existing sponsor lines', {
+    log('collected existing skippable lines', {
         count: lines.size,
         lines: [...lines],
     });
@@ -634,6 +642,11 @@ function isSponsorLine(text) {
     return SPONSOR_LABEL_PATTERN.test(text);
 }
 
+function isSkippableLine(text) {
+    return isSponsorLine(text) || /\[FUNDRAISING\]/i.test(text)
+        || FUNDRAISING_LABEL_PATTERN.test(text.trim());
+}
+
 function getChatSnapshot(chat = document.querySelector(chatSelector)) {
     if (!(chat instanceof Element)) {
         return null;
@@ -643,7 +656,7 @@ function getChatSnapshot(chat = document.querySelector(chatSelector)) {
     const texts = nodes
         .map((node) => normalizeText(node.textContent || ''))
         .filter(Boolean);
-    const sponsorTexts = texts.filter((text) => isSponsorLine(text));
+    const skipTexts = texts.filter((text) => isSkippableLine(text));
 
     return {
         element: describeElement(chat),
@@ -653,9 +666,9 @@ function getChatSnapshot(chat = document.querySelector(chatSelector)) {
             return count + (ignoredTimestampLines.has(getTimestampLineSignature(node))
                 ? 0 : node.querySelectorAll(chatTimestampItemSelector).length);
         }, 0),
-        sponsorCandidateCount: sponsorTexts.length,
+        skippableCandidateCount: skipTexts.length,
         textSample: normalizeText(chat.textContent || '').slice(0, 500),
-        sponsorSamples: sponsorTexts.slice(0, 10),
+        skippableSamples: skipTexts.slice(0, 10),
     };
 }
 
@@ -1111,10 +1124,10 @@ function timestamps(delay = settings.chatOpenDelay) {
 
         log('timestamps flow started', { localRunId });
 
-        // Save old sponsor lines before opening/sending.
+        // Save old skippable lines before opening/sending.
         // This reduces the chance of parsing a previous answer.
-        ignoredSponsorLines = document.querySelector(chatSelector)
-            ? collectExistingSponsorLines()
+        ignoredSkipLines = document.querySelector(chatSelector)
+            ? collectExistingSkipLines()
             : new Set();
 
         chatOpenAttemptCount++;
@@ -1186,7 +1199,7 @@ async function sendPrompt(localRunId) {
     const timestampPrompt = getTimestampPrompt();
     // Chat history may appear only after opening the panel. Capture it just
     // before submission so old timestamps cannot start the closing countdown.
-    ignoredSponsorLines = collectExistingSponsorLines();
+    ignoredSkipLines = collectExistingSkipLines();
     ignoredTimestampLines = collectExistingTimestampLines();
 
     log('chat textarea found; setting prompt', {
@@ -1346,7 +1359,7 @@ async function watchForAnswer(localRunId) {
             });
 
             if (!found.length) {
-                log('answer parse produced no sponsor segments', {
+                log('answer parse produced no skippable segments', {
                     localRunId,
                     parseScheduleCount,
                     observedMutationCount,
@@ -1354,11 +1367,11 @@ async function watchForAnswer(localRunId) {
                 });
 
                 if (hasTimestampAnswer(chatSnapshot)) {
-                    log('answer has timestamps but no sponsor segments; closing chat', {
+                    log('answer has timestamps but no skippable segments; closing chat', {
                         localRunId,
                         chat: chatSnapshot,
                     });
-                    scheduleChatClose(localRunId, 'answer-without-sponsor-segments');
+                    scheduleChatClose(localRunId, 'answer-without-skippable-segments');
                 }
 
                 return;
@@ -1427,8 +1440,8 @@ function parseSegments() {
 
     const stats = {
         itemCount: 0,
-        nonSponsorLineCount: 0,
-        sponsorCandidateCount: 0,
+        nonSkippableLineCount: 0,
+        skippableCandidateCount: 0,
         ignoredExistingCount: 0,
         missingTimestampCount: 0,
         invalidRangeCount: 0,
@@ -1441,14 +1454,14 @@ function parseSegments() {
 
         const text = normalizeText(node.textContent || '');
 
-        if (!isSponsorLine(text)) {
-            stats.nonSponsorLineCount++;
+        if (!isSkippableLine(text)) {
+            stats.nonSkippableLineCount++;
             return;
         }
 
-        stats.sponsorCandidateCount++;
+        stats.skippableCandidateCount++;
 
-        if (ignoredSponsorLines.has(text)) {
+        if (ignoredSkipLines.has(text)) {
             stats.ignoredExistingCount++;
             if (stats.rejectedSamples.length < 10) {
                 stats.rejectedSamples.push({
@@ -1548,7 +1561,7 @@ function updateSkipButton(video) {
     if (!segment) {
         if (skipButton) {
             if (skipButton.style.display !== 'none') {
-                log('hiding skip button because current time is outside sponsor segments', {
+                log('hiding skip button because current time is outside skippable segments', {
                     currentTime: video.currentTime,
                     segments,
                 });
@@ -1558,7 +1571,7 @@ function updateSkipButton(video) {
                     `${Math.floor(video.currentTime)}:${segments.length}`
                 )
             ) {
-                log('skip button remains hidden outside sponsor segments', {
+                log('skip button remains hidden outside skippable segments', {
                     currentTime: video.currentTime,
                     segments,
                 });
@@ -1710,7 +1723,7 @@ function bindShortcuts() {
         const segment = findCurrentSegment(video);
 
         if (!segment) {
-            logWarn('skip shortcut ignored because current time is outside sponsor segments', {
+            logWarn('skip shortcut ignored because current time is outside skippable segments', {
                 currentTime: video.currentTime,
                 segments,
             });
@@ -1765,7 +1778,7 @@ function reset() {
     segments = [];
     lastSkipButtonSegmentKey = null;
     chatOpenAttemptCount = 0;
-    ignoredSponsorLines = new Set();
+    ignoredSkipLines = new Set();
     ignoredTimestampLines = new Set();
 
     clearTimers();
