@@ -3,12 +3,8 @@
 const FILL_GROWS = true; // skip button animation style
 const FILL_COLOR = 'rgba(60,140,255,0.85)'; // played portion
 const TRACK_COLOR = 'rgba(0,0,0,0.8)'; // remaining portion
-const CLOSE_DELAY = 10000; // chat panel closing delay
-const AUTO_SKIP_DELAY = 5000; // ms; set above 0 to autoskip sponsor segments after this delay
-const CHAT_OPEN_DELAY = 1000;
-const CHAT_TEXTAREA_TIMEOUT = 10000;
-const ANSWER_TIMEOUT = 30000;
-const ANSWER_STABLE_DELAY = 1200;
+const settingsApi = globalThis.YtAutoTimestampsSettings;
+let settings = { ...settingsApi.DEFAULTS };
 
 const BUTTON_STYLE = {
     position: 'absolute',
@@ -30,7 +26,6 @@ const LOG_TO_FILE = true;
 const LOG_MESSAGE_TYPE = 'YT_AUTO_TIMESTAMPS_LOG';
 const LOG_CONSOLE_PREFIX = '[yt-auto-timestamps]';
 const LOG_THROTTLE_MS = 10000;
-const CHAT_OPEN_RETRY_DELAY = 2000;
 const CHAT_OPEN_MAX_ATTEMPTS = 3;
 
 /** @type {any} */
@@ -149,8 +144,8 @@ function getLogState() {
                 videoObserver: Boolean(videoObserver),
             },
             autoSkip: {
-                enabled: AUTO_SKIP_DELAY > 0,
-                delay: AUTO_SKIP_DELAY,
+                enabled: settings.autoSkipDelay > 0,
+                delay: settings.autoSkipDelay,
                 segmentKey: autoSkipSegmentKey,
             },
             fullscreen: {
@@ -716,13 +711,13 @@ function scheduleChatClose(localRunId, reason) {
     log('chat close scheduled', {
         localRunId,
         reason,
-        delay: CLOSE_DELAY,
+        delay: settings.closeDelay,
     });
 
     closeTimer = setTimeout(() => {
         closeTimer = null;
         closeChat(localRunId, reason);
-    }, CLOSE_DELAY);
+    }, settings.closeDelay);
 }
 
 function closeChat(localRunId, reason) {
@@ -812,7 +807,7 @@ function cancelAutoSkip(reason, details = {}) {
 }
 
 function scheduleAutoSkip(video, segment, segmentKey) {
-    if (!Number.isFinite(AUTO_SKIP_DELAY) || AUTO_SKIP_DELAY <= 0) {
+    if (settings.autoSkipDelay <= 0) {
         return;
     }
 
@@ -834,7 +829,7 @@ function scheduleAutoSkip(video, segment, segmentKey) {
         localRunId,
         segment,
         segmentKey,
-        delay: AUTO_SKIP_DELAY,
+        delay: settings.autoSkipDelay,
         currentTime: video.currentTime,
     });
 
@@ -906,7 +901,7 @@ function scheduleAutoSkip(video, segment, segmentKey) {
             segmentKey,
             currentTimeAfter: video.currentTime,
         });
-    }, AUTO_SKIP_DELAY);
+    }, settings.autoSkipDelay);
 }
 
 function getStartBlockReasons(video) {
@@ -1063,7 +1058,7 @@ function bindPlayerEvents(player) {
 }
 
 // Chat flow
-function timestamps(delay = CHAT_OPEN_DELAY) {
+function timestamps(delay = settings.chatOpenDelay) {
     const localRunId = runId;
 
     log('timestamps flow scheduled', {
@@ -1117,14 +1112,14 @@ function timestamps(delay = CHAT_OPEN_DELAY) {
                 attempt: chatOpenAttemptCount,
                 maxAttempts: CHAT_OPEN_MAX_ATTEMPTS,
                 willRetry: shouldRetry,
-                retryDelay: shouldRetry ? CHAT_OPEN_RETRY_DELAY : null,
+                retryDelay: shouldRetry ? settings.chatOpenRetryDelay : null,
                 fullscreenElement: describeElement(document.fullscreenElement),
                 matchingWatchFlexyCount: document.querySelectorAll(watchFlexySelector).length,
                 fullscreenWatchFlexyCount: document.querySelectorAll(watchFlexyFullscreenSelector).length,
             });
 
             if (shouldRetry) {
-                timestamps(CHAT_OPEN_RETRY_DELAY);
+                timestamps(settings.chatOpenRetryDelay);
             }
 
             return;
@@ -1147,12 +1142,12 @@ async function sendPrompt(localRunId) {
     log('sendPrompt waiting for textarea', {
         localRunId,
         selector: chatTextareaSelector,
-        timeout: CHAT_TEXTAREA_TIMEOUT,
+        timeout: settings.chatTextareaTimeout,
     });
 
     const textarea = await waitForElement(
         chatTextareaSelector,
-        CHAT_TEXTAREA_TIMEOUT,
+        settings.chatTextareaTimeout,
         localRunId
     );
 
@@ -1228,14 +1223,14 @@ async function watchForAnswer(localRunId) {
     log('watchForAnswer starting', {
         localRunId,
         chatSelector,
-        timeout: CHAT_TEXTAREA_TIMEOUT,
+        timeout: settings.chatTextareaTimeout,
     });
 
     clearAnswerWatcher();
 
     const chat = await waitForElement(
         chatSelector,
-        CHAT_TEXTAREA_TIMEOUT,
+        settings.chatTextareaTimeout,
         localRunId
     );
 
@@ -1356,7 +1351,7 @@ async function watchForAnswer(localRunId) {
             } else {
                 logWarn('segments stored but active player is missing');
             }
-        }, ANSWER_STABLE_DELAY);
+        }, settings.answerStableDelay);
     };
 
     answerObserver = new MutationObserver(scheduleParse);
@@ -1376,7 +1371,7 @@ async function watchForAnswer(localRunId) {
             chat: getChatSnapshot(chat),
         });
         closeChat(localRunId, 'answer-timeout');
-    }, ANSWER_TIMEOUT);
+    }, settings.answerTimeout);
 
     // Parse once immediately in case the answer appears before the observer starts.
     scheduleParse();
@@ -1946,7 +1941,46 @@ function isIgnoredWindowError(message) {
     );
 }
 
-function init() {
+async function loadSettings() {
+    try {
+        const result = await new Promise((resolve, reject) => {
+            chromeApi.storage.local.get({ [settingsApi.STORAGE_KEY]: settingsApi.DEFAULTS }, (values) => {
+                const error = chromeApi.runtime.lastError;
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve(values);
+            });
+        });
+        settings = settingsApi.normalize(result[settingsApi.STORAGE_KEY]);
+    } catch (error) {
+        logWarn('could not load settings; using defaults', error);
+    }
+}
+
+function bindSettingsChanges() {
+    chromeApi.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local' || !Object.prototype.hasOwnProperty.call(changes, settingsApi.STORAGE_KEY)) {
+            return;
+        }
+        const previousAutoSkipDelay = settings.autoSkipDelay;
+        settings = settingsApi.normalize(changes[settingsApi.STORAGE_KEY].newValue);
+        log('settings updated', settings);
+
+        if (previousAutoSkipDelay !== settings.autoSkipDelay) {
+            cancelAutoSkip('settings-changed');
+            if (activePlayer && segments.length) {
+                updateSkipButton(activePlayer);
+            }
+        }
+    });
+}
+
+async function init() {
+    await loadSettings();
+    bindSettingsChanges();
+
     log('init started', {
         manifestHint: 'YT Auto Timestamps',
         pageUrl: window.location.href,

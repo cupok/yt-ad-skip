@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YT Auto Timestamps · Settings</title>
+    <link rel="stylesheet" href="settings.css">
+    <script src="settings.js" defer></script>
+    <script src="settings-ui.js" defer></script>
+</head>
+<body>
+    <main>
+        <header>
+            <p class="brand">YT Auto Timestamps</p>
+            <h1 data-i18n="title">Settings</h1>
+            <p class="intro" data-i18n="intro">Adjust the timing. All values are in seconds.</p>
+        </header>
+        <form id="settings-form">
+            <fieldset id="settings-fields" disabled>
+                <div id="main-fields" class="fields"></div>
+                <details>
+                    <summary data-i18n="advanced">Advanced timing</summary>
+                    <div id="advanced-fields" class="fields"></div>
+                </details>
+                <div class="actions">
+                    <button type="submit" class="primary" data-i18n="save">Save settings</button>
+                    <button type="button" id="reset" data-i18n="reset">Reset defaults</button>
+                </div>
+            </fieldset>
+        </form>
+        <p id="status" role="status" aria-live="polite"></p>
+        <footer>
+            <span data-i18n="logs">Troubleshooting</span>
+            <button type="button" id="export" data-i18n="export">Export logs</button>
+        </footer>
+    </main>
+</body>
+</html>

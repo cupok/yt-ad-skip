@@ -211,6 +211,16 @@ async function flushLogFile() {
 }
 
 chromeApi['runtime']['onMessage']['addListener']((message, _sender, sendResponse) => {
+    if (message?.type === 'YT_AUTO_TIMESTAMPS_EXPORT_LOG') {
+        flushLogFile()
+            .then(() => sendResponse({ ok: true }))
+            .catch((error) => {
+                console.warn('[yt-auto-timestamps:background] failed to export log file', error);
+                sendResponse({ ok: false });
+            });
+        return true;
+    }
+
     if (message?.type !== LOG_MESSAGE_TYPE) {
         return false;
     }
@@ -246,15 +256,4 @@ chromeApi['runtime']['onStartup']['addListener'](() => {
     });
 });
 
-chromeApi['action']['onClicked']['addListener'](() => {
-    queueLog({
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'manual log export requested',
-    })
-        .then(() => flushLogFile())
-        .catch((error) => {
-            console.warn('[yt-auto-timestamps:background] failed to export log file', error);
-        });
-});
 })();

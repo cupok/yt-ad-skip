@@ -5,8 +5,9 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
+const settingsSource = fs.readFileSync(path.join(__dirname, '..', 'settings.js'), 'utf8');
 
-function loadContent({ pageLanguage = '', languages = [], language = '', debug = false } = {}) {
+function loadContent({ pageLanguage = '', languages = [], language = '', debug = false, storedSettings, storageError } = {}) {
     class Element {
         constructor(text = '') {
             this.textContent = text;
@@ -24,6 +25,7 @@ function loadContent({ pageLanguage = '', languages = [], language = '', debug =
     const logs = [];
     const timers = new Map();
     const observers = [];
+    const settingsListeners = [];
     let nextTimerId = 0;
     const container = new HTMLElement();
     const document = {
@@ -41,6 +43,18 @@ function loadContent({ pageLanguage = '', languages = [], language = '', debug =
         ])),
         document,
         navigator: { languages, language },
+        chrome: {
+            runtime: { lastError: storageError },
+            storage: {
+                local: {
+                    get(defaults, callback) {
+                        const key = Object.keys(defaults)[0];
+                        callback(storedSettings === undefined ? defaults : { [key]: storedSettings });
+                    },
+                },
+                onChanged: { addListener(listener) { settingsListeners.push(listener); } },
+            },
+        },
         window: { location: { href: 'https://www.youtube.com/watch?v=test' } },
         Element,
         HTMLElement,
@@ -61,16 +75,21 @@ function loadContent({ pageLanguage = '', languages = [], language = '', debug =
     };
     const init = '\ninit();\n})();';
     assert.ok(source.includes(init), 'test harness must replace extension initialization');
-    vm.runInNewContext(source
+    vm.createContext(context);
+    vm.runInContext(settingsSource, context);
+    vm.runInContext(source
         .replace('const DEBUG = true;', `const DEBUG = ${debug};`)
         .replace('const LOG_TO_FILE = true;', 'const LOG_TO_FILE = false;')
         .replace(init, `
 globalThis.extension = {
     detectUserLanguage, getTranslations, getTimestampPrompt, isSponsorLine,
     parseSegments, collectExistingSponsorLines, updateSkipButton, watchForAnswer,
+    loadSettings, bindSettingsChanges, timestamps, scheduleChatClose,
     get language() { return userLanguage; },
     get button() { return skipButton; },
+    get settings() { return settings; },
     setSegments(value) { segments = value; },
+    setActivePlayer(value) { activePlayer = value; },
     ignoreExistingLines() { ignoredSponsorLines = collectExistingSponsorLines(); },
 };
 })();`), context);
@@ -97,7 +116,12 @@ globalThis.extension = {
         }
     }
 
-    return { extension: context.extension, document, HTMLMediaElement, setChat, logs, timers, observers, runTimers };
+    function changeSettings(value, area = 'local') {
+        const key = context.YtAutoTimestampsSettings.STORAGE_KEY;
+        settingsListeners.forEach(listener => listener({ [key]: { newValue: value } }, area));
+    }
+
+    return { extension: context.extension, document, HTMLMediaElement, setChat, logs, timers, observers, runTimers, changeSettings };
 }
 
 test('YouTube language takes priority over browser preferences', () => {
@@ -214,4 +238,55 @@ test('an answer timeout still reports a warning', async () => {
     await extension.watchForAnswer(0);
     runTimers(30000);
     assert.ok(logs.some(({ level, args }) => level === 'warn' && args[1] === 'answer timeout'));
+});
+
+test('saved settings control chat opening, closing, and response timers', async () => {
+    const { extension, timers, setChat } = loadContent({ storedSettings: {
+        chatOpenDelay: 2500, closeDelay: 3000, answerStableDelay: 1600, answerTimeout: 45000,
+    } });
+    await extension.loadSettings();
+    extension.timestamps();
+    extension.scheduleChatClose(0, 'test');
+    setChat([]);
+    await extension.watchForAnswer(0);
+    const delays = [...timers.values()].map(({ delay }) => delay);
+    assert.deepEqual(delays.sort((a, b) => a - b), [1600, 2500, 3000, 45000]);
+});
+
+test('settings storage failures keep usable defaults', async () => {
+    const { extension, logs } = loadContent({ debug: true, storageError: { message: 'storage unavailable' } });
+    await extension.loadSettings();
+    assert.equal(extension.settings.autoSkipDelay, 5000);
+    assert.ok(logs.some(({ level, args }) => level === 'warn' && args[1] === 'could not load settings; using defaults'));
+});
+
+test('disabling auto-skip in settings cancels a pending skip on an open tab', () => {
+    const { extension, HTMLMediaElement, timers, changeSettings } = loadContent();
+    extension.bindSettingsChanges();
+    const video = new HTMLMediaElement();
+    video.currentTime = 45;
+    video.duration = 600;
+    extension.setActivePlayer(video);
+    extension.setSegments([{ start: 30, end: 60 }]);
+    extension.updateSkipButton(video);
+    assert.ok([...timers.values()].some(({ delay }) => delay === 5000));
+    changeSettings({ autoSkipDelay: 0 });
+    assert.equal(timers.size, 0);
+    assert.equal(video.currentTime, 45);
+    assert.equal(extension.button.style.display, 'block');
+    changeSettings({ autoSkipDelay: 3000 });
+    assert.ok([...timers.values()].some(({ delay }) => delay === 3000));
+});
+
+test('changes use the local settings key and leave unrelated timers running', () => {
+    const { extension, timers, changeSettings } = loadContent();
+    extension.bindSettingsChanges();
+    extension.timestamps();
+    changeSettings({ closeDelay: 3000 }, 'sync');
+    assert.equal(extension.settings.closeDelay, 10000);
+    changeSettings({ closeDelay: 3000 });
+    assert.equal(extension.settings.closeDelay, 3000);
+    assert.ok([...timers.values()].some(({ delay }) => delay === 1000));
+    changeSettings(undefined);
+    assert.equal(extension.settings.closeDelay, 10000);
 });

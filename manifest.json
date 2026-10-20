@@ -5,7 +5,12 @@
   "description": "Triggers AI chat to load generate timestamps of the current video",
   "permissions": ["downloads", "storage"],
   "action": {
-    "default_title": "Export YT Auto Timestamps logs"
+    "default_title": "YT Auto Timestamps settings",
+    "default_popup": "settings.html"
+  },
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
   },
   "background": {
     "service_worker": "background.js"
@@ -13,7 +18,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],
-      "js": ["content.js"],
+      "js": ["settings.js", "content.js"],
       "run_at": "document_idle"
     }
   ]

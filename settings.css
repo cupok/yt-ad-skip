@@ -1,0 +1,39 @@
+:root {
+    color-scheme: light dark;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    color: #202124;
+    background: #f7f8fa;
+}
+* { box-sizing: border-box; }
+body { width: 400px; margin: 0 auto; }
+main { padding: 24px; }
+.brand { margin: 0 0 8px; color: #526174; font-size: 12px; font-weight: 600; }
+h1 { margin: 0 0 8px; font-size: 24px; letter-spacing: -0.5px; }
+.intro { margin: 0 0 22px; color: #526174; line-height: 1.5; }
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.fields { display: grid; gap: 16px; }
+.field { display: grid; grid-template-columns: 1fr 78px; align-items: start; gap: 12px; }
+.field label { display: block; font-weight: 600; line-height: 1.4; }
+.field p { margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: #526174; }
+input { width: 100%; padding: 8px; border: 1px solid #c6cdd6; border-radius: 6px; background: #fff; color: inherit; font: inherit; }
+input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid #3277de; outline-offset: 3px; }
+details { margin-top: 22px; padding-top: 16px; border-top: 1px solid #dce1e7; }
+summary { cursor: pointer; font-weight: 600; }
+details .fields { margin-top: 18px; }
+.actions { display: flex; gap: 8px; margin-top: 24px; }
+button { padding: 9px 12px; border: 1px solid #c6cdd6; border-radius: 6px; background: #fff; color: inherit; cursor: pointer; font: inherit; font-weight: 500; }
+button.primary { background: #245fc7; border-color: #245fc7; color: #fff; }
+button:disabled { opacity: 0.55; cursor: default; }
+#status { min-height: 32px; margin: 10px 0 0; line-height: 1.4; color: #28653c; }
+#status[data-error="true"] { color: #b3261e; }
+footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 14px; border-top: 1px solid #dce1e7; color: #526174; }
+footer button { font-size: 12px; }
+@media (prefers-color-scheme: dark) {
+    :root { color: #e8eaed; background: #202124; }
+    .brand, .intro, .field p, footer { color: #aeb9c7; }
+    input, button { background: #292c31; border-color: #535b67; }
+    details, footer { border-color: #414750; }
+    #status { color: #91d6a5; }
+    #status[data-error="true"] { color: #ffb4ab; }
+}
