@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible problem with YT Ad Skip.
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Check existing issues first. AI chat must be available on the video.
+        Do not post raw logs, credentials, private URLs, or security vulnerabilities.
+        See PRIVACY.md and SECURITY.md before sharing diagnostics.
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      description: Shown on the extension card in chrome://extensions.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Chrome version, operating system, and YouTube language
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include whether video AI chat is available and playback is in fullscreen.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: input
+    id: video
+    attributes:
+      label: Public video URL and approximate time range, if relevant
+      description: Do not include private or unlisted videos unless you intend to share them publicly.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional redacted diagnostics
+      description: Share only the smallest relevant excerpt after reviewing it for private information.

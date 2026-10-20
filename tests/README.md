@@ -1,6 +1,7 @@
 # Tests
 
-Run with Node.js 22.5 or newer. No dependencies or installation are required.
+Run with Git and Node.js 22.5 or newer. No package dependencies or installation
+are required. Release tests create isolated temporary Git repositories.
 
 ```sh
 npm test
@@ -22,6 +23,7 @@ independent of network access, real waiting, and an installed extension.
 | `background.test.cjs` | Log batching and persistence; line and byte retention caps; overlapping writes; storage failures and recovery; export flushing; download failures; lifecycle diagnostics |
 | `settings.test.cjs` | Configuration validation and defaults; manifest wiring; explicit log export |
 | `settings-ui.test.cjs` | Localized form controls; storage loading; saving and resetting; seconds conversion; validation handling; loading and saving errors; explicit export and error feedback |
+| `release.test.cjs` | Version synchronization; changelog preparation; release notes; packaging allowlist and checksum; dirty-tree protection; release command behavior in isolated temporary projects |
 
 The doubles register the selectors used by the extension. These are behavior
 tests, not a full browser or a copy of YouTube. They do not verify YouTube's

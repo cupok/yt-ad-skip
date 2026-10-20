@@ -2,10 +2,15 @@
   "name": "yt-ad-skip",
   "version": "1.0.0",
   "private": true,
-  "description": "Tests for the YT Ad Skip browser extension",
+  "description": "Skip sponsor and fundraising segments on YouTube with a cancellable countdown.",
+  "license": "MIT",
   "scripts": {
+    "check": "node scripts/check.mjs",
     "test": "node --test tests/*.test.cjs",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=content.js --test-coverage-include=background.js --test-coverage-include=settings.js --test-coverage-include=settings-ui.js tests/*.test.cjs"
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=content.js --test-coverage-include=background.js --test-coverage-include=settings.js --test-coverage-include=settings-ui.js tests/*.test.cjs",
+    "release:prepare": "node scripts/release.mjs prepare",
+    "release:notes": "node scripts/release.mjs notes",
+    "package": "node scripts/package.mjs"
   },
   "engines": {
     "node": ">=22.5.0"
