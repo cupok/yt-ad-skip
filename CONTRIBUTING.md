@@ -33,6 +33,12 @@ not reserve implementation work or guarantee it will be accepted.
    details. Documentation-only and test-only work usually needs no entry.
 7. Open a pull request against `main` with a summary and validation results.
 
+The active `main` ruleset requires a PR, verified signed commits, a passing
+`Node 24` check from GitHub Actions, and an up-to-date branch. Set up commit
+signing before creating commits; unsigned commits on a PR branch can block a
+squash merge even if the final squash commit would be signed by GitHub.
+See [GitHub's signing requirements](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-signed-commits).
+
 Changing extension files requires reloading the extension in `chrome://extensions`
 and refreshing existing YouTube tabs before testing the updated behavior.
 
@@ -55,9 +61,15 @@ CI runs on pull requests. The maintainer reviews the proposed behavior, tests,
 permissions, and privacy impact, and may request changes. A passing test suite
 does not guarantee a merge. Please keep discussions respectful and specific.
 
-The usual merge method is **Squash and merge**, using the final Conventional
-Commit PR title. Maintainers should not amend or force-push published release
-commits or tags. Work is voluntary; response and release times are not guaranteed.
+The allowed merge method is **Squash and merge**, using the final Conventional
+Commit PR title and PR description as the default commit message. Resolve review
+conversations before merging. No separate approving review is required by the
+current ruleset, but the maintainer still decides which changes to accept.
+GitHub automatically deletes merged head branches in this repository; contributors
+manage local branches and branches in their own forks separately.
+
+Maintainers should not amend or force-push published release commits or tags.
+Work is voluntary; response and release times are not guaranteed.
 
 By contributing, you agree that your contribution is provided under this
 repository's [MIT license](LICENSE). You retain copyright in your contributions.

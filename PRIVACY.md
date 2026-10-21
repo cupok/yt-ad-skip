@@ -16,8 +16,9 @@ system. It does not send diagnostic logs to the maintainer automatically.
 
 `chrome.storage.local` contains settings and recent diagnostic log lines.
 The logger retains up to 1,000 lines, with a target size cap of 2 MiB. A single
-oversized newest log line can exceed that cap. Console debug can be disabled in
-settings; this does not disable local log collection.
+oversized newest log line can exceed that cap. Console debug is off by default;
+existing saved preferences are preserved. Changing the console debug setting
+does not disable local log collection.
 
 Diagnostics can include the current page URL and video ID, media URLs, playback
 state, DOM text samples, snippets of AI chat replies, errors, and extension state.

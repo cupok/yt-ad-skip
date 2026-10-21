@@ -28,8 +28,10 @@ integration. Other browsers and mobile devices are not currently supported.
 
 There is no Chrome Web Store listing yet. Install an unpacked copy:
 
-1. Download and extract a release ZIP from this repository's **Releases** page,
-   when available. You can also clone the repository or download its source ZIP.
+1. Open the [latest release](https://github.com/cupok/yt-ad-skip/releases/latest)
+   and download the `yt-ad-skip-v<VERSION>.zip` asset, then extract it. This is the
+   installable package; GitHub's **Source code** downloads also include development
+   files. You can clone the repository for development.
 2. Open `chrome://extensions` in Chrome and turn on **Developer mode**.
 3. Click **Load unpacked** and select the folder containing `manifest.json`.
 4. Refresh any YouTube tabs that were already open.
@@ -139,6 +141,9 @@ change and [SECURITY.md](SECURITY.md) for security reports.
 
 Notable changes go into [CHANGELOG.md](CHANGELOG.md). The maintainer's
 [release guide](RELEASING.md) explains versions, tags, draft releases, and updates.
+For the reasoning behind the process and GitHub settings, read the
+[release workflow explanation](https://github.com/cupok/yt-ad-skip/blob/main/docs/RELEASE-WORKFLOW.md)
+in the source repository.
 `package.json` remains `private: true` to prevent accidental npm publication;
 this does not affect GitHub visibility or the open-source license.
 
