@@ -27,7 +27,9 @@ not reserve implementation work or guarantee it will be accepted.
 3. Keep the change focused and follow the existing plain JavaScript style.
 4. Add regression tests for behavior changes. Put test utilities in
    `tests/helpers`; production scripts should not expose test-only APIs.
-5. Run `npm run check`, `npm test`, and any relevant manual Chrome checks.
+5. Run `npm run check`, `npm test`, and any relevant Chrome checks. See the
+   [testing guide](tests/README.md#browser-testing-with-chrome-devtools-mcp) for
+   optional MCP checks and deterministic AI-response reproduction.
 6. Add an entry under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for a
    user-visible change. Describe the result for users rather than implementation
    details. Documentation-only and test-only work usually needs no entry.

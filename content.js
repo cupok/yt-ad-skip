@@ -1563,23 +1563,20 @@ function parseSegments() {
             return;
         }
 
-        let rangeOffset = 0;
-        if (times.length === 3 && times[0] === times[1]) {
-            // AI may prefix a range with its chapter time, e.g.
-            // (19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36).
-            // Only discard that duplicate when the displayed range agrees with
-            // the linked timestamps; an unrelated later link is not an endpoint.
-            const repeatedRange = /^\((\d+:\d{2}(?::\d{2})?)\)\s+.*?\(\1\s*[–—-]\s*(\d+:\d{2}(?::\d{2})?)\)/.exec(text);
-            if (repeatedRange
-                && timestampTextToSeconds(repeatedRange[1]) === times[1]
-                && timestampTextToSeconds(repeatedRange[2]) === times[2]) {
-                rangeOffset = 1;
-            }
+        let rangeTimes = times;
+        if (/^\(\d+:\d{2}(?::\d{2})?\)\s+/.test(text)) {
+            // AI may prefix a range with an unrelated chapter time, e.g.
+            // (0:20:47) [SPONSOR] Sponsor segment: (19:07 – 20:36).
+            // Require all three links to match the displayed timestamps so a
+            // missing endpoint or an unrelated later link cannot supply a range.
+            const chapterRange = /^\((\d+:\d{2}(?::\d{2})?)\)\s+.*?\((\d+:\d{2}(?::\d{2})?)\s*[–—-]\s*(\d+:\d{2}(?::\d{2})?)\)/.exec(text);
+            const matchesRange = timestampAttributes.length === 3 && times.length === 3
+                && chapterRange && chapterRange.slice(1).every((value, i) => timestampTextToSeconds(value) === times[i]);
+            rangeTimes = matchesRange ? times.slice(1) : [];
         }
-        const start = times[rangeOffset];
-        const end = times[rangeOffset + 1];
+        const [start, end] = rangeTimes;
 
-        if (end <= start) {
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
             stats.invalidRangeCount++;
             if (stats.rejectedSamples.length < 10) {
                 stats.rejectedSamples.push({
