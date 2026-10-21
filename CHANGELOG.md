@@ -4,7 +4,7 @@ Notable user-facing changes are recorded here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The initial public release is prepared from the previously untagged development
+The initial public release was prepared from the previously untagged development
 history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]

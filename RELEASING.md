@@ -3,29 +3,33 @@
 This project uses a small GitHub workflow: feature branches, pull requests into
 `main`, and tagged releases. There is no separate `develop` branch or npm package.
 
-## Before making the repository public
+## Publication and repository settings
 
-1. Commit the repository preparation, including the MIT license, documentation,
-   scripts, and `.github` files.
-2. Review the Git history and author names/emails you intend to publish. Ignore
-   rules prevent future additions; they do not remove files or secrets from old
-   commits. The initial pattern-based review found no obvious credentials, but
-   it was not a guarantee that every kind of sensitive information was detected.
-3. Create the GitHub repository without generating a second README, license, or
-   Git history. Add its remote URL locally and push the prepared `main` branch.
-4. In GitHub, enable Issues, private vulnerability reporting, and available
-   secret-scanning/push-protection features. Keep Actions restricted to the
-   permissions requested by each workflow.
-5. Configure the repository to allow squash merges. For `main`, use a branch rule
-   or ruleset requiring PRs and the CI checks after they have run successfully.
-   A solo maintainer need not require an approval from a second person.
-6. Avoid deleting or force-pushing release tags. Require a maintainer review for
-   workflow or permission changes. Add Discussions only if you want to support
-   a separate conversation area.
+The repository is public. The first release,
+[v1.0.0](https://github.com/cupok/yt-ad-skip/releases/tag/v1.0.0), was published on
+2026-10-21. CI and the draft-release workflow were verified for that release.
+Future releases use new versions and tags; do not recreate `v1.0.0`.
 
-Nothing in these files creates a repository, pushes code, or makes the existing
-repository public by itself. GitHub settings must be configured after hosting
-the repository.
+Repository settings checked on 2026-10-21:
+
+- The active default-branch ruleset requires a PR, verified signed commits,
+  resolved review conversations, a passing `Node 24` check from GitHub Actions,
+  and an up-to-date branch. It requires zero approving reviews and has no bypass
+  actors, so a solo maintainer can merge their own PR after the other checks pass.
+- Squash merging is the only allowed merge method. The default commit message
+  uses the PR title and description. Merged head branches are deleted automatically
+  in this repository; local and fork branches need separate cleanup.
+- Issues, private vulnerability reporting, secret scanning, and secret-scanning
+  push protection are enabled. Auto-merge is off.
+
+Keep these settings under review in GitHub. Markdown and workflow files do not
+configure repository rules or visibility by themselves. Do not delete or move
+published release tags, and review workflow or permission changes carefully.
+The current ruleset protects the default branch, not release tags.
+
+For terminology and the reasons behind this process, read the
+[release workflow explanation](https://github.com/cupok/yt-ad-skip/blob/main/docs/RELEASE-WORKFLOW.md)
+in the source repository.
 
 ## Everyday contributions
 
@@ -49,7 +53,7 @@ changes before you decide to publish a new version.
 ## Choose a version
 
 Use the same numeric `MAJOR.MINOR.PATCH` in `manifest.json` and `package.json`.
-The current untagged project is `1.0.0`; that is the proposed first public release.
+`1.0.0` has already been released. Choose a new version for each future release.
 
 | Change | Example next version |
 | --- | --- |
@@ -69,62 +73,87 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Prepare a release
 
-Start from an up-to-date `main`, with your ordinary feature work already merged.
-For the first release:
+Start from an up-to-date `main`, with ordinary feature work and its user-facing
+`Unreleased` changelog notes already merged. The following commands use `1.0.1`
+as an example next patch release; choose the version appropriate to the changes.
+The helper rejects an empty `Unreleased` section, so wait until there are release
+notes to publish.
 
 ```sh
-git switch -c release/1.0.0
-npm run release:prepare -- 1.0.0
-npm run check
+git switch main
+git pull --ff-only
+git switch -c release/1.0.1
+npm run release:prepare -- 1.0.1
+npm run check -- --tag v1.0.1
 npm test
 npm run test:coverage
 ```
 
 The preparation command updates both version files, moves `Unreleased` notes
-into a dated `1.0.0` section, and leaves a fresh `Unreleased` section. It does not
-commit, tag, push, or publish anything. The first release can keep `1.0.0` because
-it has not been released yet. Once a version has a dated entry, reuse is rejected.
+into a dated `1.0.1` section, and leaves a fresh `Unreleased` section. It does not
+commit, tag, push, or publish anything. Once a version has a dated entry, reuse is
+rejected. The `check -- --tag` command validates the proposed tag name and release
+metadata without creating a tag.
 
-Review the diff and perform the manual smoke check described below, then:
+Review the version numbers and changelog diff, then commit the preparation:
 
 ```sh
 git add manifest.json package.json CHANGELOG.md
-git commit -m "chore(release): prepare 1.0.0"
-git push -u origin release/1.0.0
+git commit -m "chore(release): prepare 1.0.1"
+git push -u origin release/1.0.1
 ```
 
-Open and merge the release PR. For a later release, use the chosen new number,
-for example `npm run release:prepare -- 1.0.1`.
+Open a PR against `main`. Wait for the required checks and resolve review
+conversations, then squash merge with a Conventional Commit title. Local commits
+must have signatures GitHub can verify, as required by the ruleset.
 
-## Tag, build, and publish
+## Build, test, tag, and publish
 
 After the release PR is merged, update local `main` and build the committed tree:
 
 ```sh
 git switch main
 git pull --ff-only
-npm run check
+npm run check -- --tag v1.0.1
 npm test
 npm run package
-git tag -a v1.0.0 -m "Release 1.0.0"
-git push origin v1.0.0
 ```
 
-`npm run package` produces `dist/yt-ad-skip-v1.0.0.zip` and its `.sha256` checksum.
-It archives only explicitly listed, committed extension and documentation files.
-Tests, scripts, Git metadata, editor files, local logs, and environment files are
-excluded. Packaging refuses uncommitted changes to included files.
+For version `1.0.1`, `npm run package` produces `dist/yt-ad-skip-v1.0.1.zip` and
+its `.sha256` checksum. It archives only explicitly listed, committed extension
+and documentation files. Tests, scripts, Git metadata, editor files, local logs,
+and environment files are excluded. Packaging refuses uncommitted changes to
+included files.
 
-Pushing `v1.0.0` starts the **Draft release** workflow. It checks the tag against
+Extract the ZIP and run the manual smoke check below. Disable other unpacked
+copies before testing, and refresh YouTube tabs. Once the packaged build passes,
+tag that tested commit from the repository:
+
+```sh
+git tag -a v1.0.1 -m "Release 1.0.1"
+git push origin v1.0.1
+```
+
+Pushing `v1.0.1` starts the **Draft release** workflow. It checks the tag against
 both version files and the dated changelog, runs the checks and tests, packages
 the extension, and creates a **draft** GitHub release containing the ZIP,
 checksum, and changelog notes. The workflow uses GitHub's built-in token; no
 personal token or Chrome Web Store credentials are needed.
 
-Review the draft under **Releases**, download its ZIP, install it in Chrome, and
-click **Publish release** when satisfied. Creating or merging a PR does not
-publish a release. If a workflow rerun finds an existing draft, inspect that
-draft instead of moving the tag or overwriting a published release.
+Review the draft under **Releases** and download both its ZIP and checksum.
+From their download directory, verify the ZIP:
+
+```sh
+shasum -a 256 -c yt-ad-skip-v1.0.1.zip.sha256
+```
+
+Confirm the uploaded archive contains the tested files, install it in Chrome,
+and click **Publish release** when satisfied. Separately built ZIPs can have
+different metadata or compression, so compare extracted file contents if their
+archive hashes differ; verify each ZIP against its own supplied checksum.
+Creating or merging a PR does not publish a release. If a workflow rerun finds
+an existing draft, inspect that draft instead of moving the tag or overwriting
+a published release.
 
 GitHub publishing and Chrome Web Store publishing are separate. The current
 workflow distributes unpacked releases through GitHub only. Users must replace
@@ -132,7 +161,7 @@ their installed files, reload the extension, and refresh YouTube tabs to update.
 
 ## Manual smoke check
 
-- Load the release ZIP as an unpacked extension in Chrome.
+- Extract the release ZIP and load its folder as an unpacked extension in Chrome.
 - Open settings, change a whole-second delay, save it, and reopen the popup.
 - Check the English, Ukrainian, and Russian interfaces where practical.
 - On an eligible video, enter fullscreen and verify that the submitted prompt
@@ -156,5 +185,6 @@ prepare a patch release. Never amend an already published release commit or
 reuse its tag for different code. If a release must be withdrawn, explain the
 problem in its notes and publish a new version with the fix.
 
-The GitHub workflows are prepared locally and can only be verified end to end
-after the repository is hosted and Actions runs there.
+Check the PR, `main`, and tag-triggered workflow results for each future release.
+Passing local checks alone does not verify GitHub's workflow execution or the
+uploaded release assets.
