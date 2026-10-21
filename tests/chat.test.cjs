@@ -179,36 +179,56 @@ test('parsing normalizes whitespace and keeps multiple valid sponsor ranges', ()
 });
 
 for (const marker of ['SPONSOR', 'FUNDRAISING']) {
-    test(`${marker}: a repeated leading timestamp still produces a working skip button`, async () => {
-        const h = loadContent();
-        const video = h.video({ currentTime: 1150, duration: 2000 });
-        h.extension.setActivePlayer(video);
-        h.setChat([{
-            text: `(19:07) [${marker}] Sponsor segment: (19:07 – 20:36) Hills Pet Nutrition.`,
-            times: [1147, 1147, 1236],
-        }]);
-        await h.extension.watchForAnswer(0);
-        await h.advance(1200);
-        assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":1147,"end":1236}]');
-        assert.equal(h.extension.button.style.display, 'block');
-        assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
-        await h.advance(4999);
-        assert.equal(video.currentTime, 1150);
-        await h.advance(1);
-        assert.equal(video.currentTime, 1236);
-    });
+    for (const chapter of [
+        { text: '19:07', time: 1147 },
+        { text: '0:20:47', time: 1247 },
+        { text: '18:00', time: 1080 },
+        { text: '19:30', time: 1170 },
+    ]) {
+        test(`${marker}: leading chapter ${chapter.text} preserves the range and working skip button`, async () => {
+            const h = loadContent();
+            const video = h.video({ currentTime: 1150, duration: 2000 });
+            h.extension.setActivePlayer(video);
+            h.setChat([{
+                text: `(${chapter.text}) [${marker}] Sponsor segment: (19:07 – 20:36) Hills Pet Nutrition.`,
+                times: [chapter.time, 1147, 1236],
+            }]);
+            await h.extension.watchForAnswer(0);
+            await h.advance(1200);
+            assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":1147,"end":1236}]');
+            assert.equal(h.extension.button.style.display, 'block');
+            assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
+            await h.advance(4999);
+            assert.equal(video.currentTime, 1150);
+            await h.advance(1);
+            assert.equal(video.currentTime, 1236);
+        });
+    }
 }
 
-test('repeated-start parsing supports hour timestamps and excludes old chat history', () => {
+test('leading-chapter parsing supports hour timestamps and excludes old chat history', () => {
     const h = loadContent();
     const old = { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1147, 1147, 1236] };
     h.setChat([old]);
     h.extension.ignoreExistingLines();
     h.setChat([old, {
-        text: '(1:19:07) [FUNDRAISING] Збір коштів: (1:19:07 — 1:20:36)',
-        times: [4747, 4747, 4836],
+        text: '(1:20:47) [FUNDRAISING] Збір коштів: (1:19:07 — 1:20:36)',
+        times: [4847, 4747, 4836],
     }]);
     assert.equal(JSON.stringify(h.extension.parseSegments()), '[{"start":4747,"end":4836}]');
+});
+
+test('different chapter timestamps cannot supply missing or mismatched range endpoints', () => {
+    const h = loadContent();
+    h.setChat([
+        { text: '(18:00) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1080, 1147] },
+        { text: '(18:00) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1080, 1147, 'oops'] },
+        { text: '(18:00) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1080, 1147, 1500] },
+        { text: '(18:00) [SPONSOR] Sponsor segment: (19:07 – 20:99)', times: [1080, 1147, 1299] },
+        { text: '(18:00) [SPONSOR] Sponsor segment: (19:07 – 20:36) Another (25:00)', times: [1080, 1147, 1236, 1500] },
+        { text: '(18:00) [SPONSOR] No end provided. Next chapter (20:36)', times: [1080, 1147, 1236] },
+    ]);
+    assert.equal(h.extension.parseSegments().length, 0);
 });
 
 test('a duplicate start never turns invalid ranges or unrelated timestamps into a segment', () => {

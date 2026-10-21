@@ -9,6 +9,12 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]
 
+### Fixed
+
+- Sponsor and fundraising ranges are recognized when an AI response adds a
+  different chapter timestamp before the range, restoring the cancellation
+  countdown and automatic skipping for those segments.
+
 ## [1.0.0] - 2026-10-21
 
 ### Added

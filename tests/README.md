@@ -37,3 +37,36 @@ VM scripts use their real filenames so Node's coverage report includes the
 extension source. Content tests replace only the final startup call with test
 hooks and override configuration flags per test. Production files do not expose
 test APIs.
+
+## Browser testing with Chrome DevTools MCP
+
+Chrome DevTools MCP is an optional way to run browser checks with an AI coding
+agent. Configure it using the [official setup guide](https://github.com/ChromeDevTools/chrome-devtools-mcp/#mcp-client-configuration).
+Add `--categoryExtensions` to the server arguments to enable extension tools;
+restart the MCP server or client after changing its configuration. MCP is not
+required for the Node test suite or CI.
+
+For a browser check, load this repository as an unpacked extension with
+`install_extension`, then use `list_extensions` to confirm it is enabled. After
+code changes, reload the extension and refresh the test tab. The controlled
+browser has its own profile; confirm its account, installed extensions, and
+YouTube AI chat availability before attempting the complete flow.
+
+Use snapshots and scripts to inspect YouTube's current DOM, screenshots for
+layout, console messages for content-script diagnostics, and service-worker
+evaluation for background state. Exercise the behavior affected by the fix,
+including settings, fullscreen, cancellation, or seeking as appropriate.
+
+For unpredictable AI responses, reproduce the reported format in a deterministic
+regression test first. Preserve both displayed timestamp text and linked
+`data-time` values. For example, `(0:20:47) [SPONSOR] Sponsor segment:
+(19:07 – 20:36)` must produce the range `1147–1236`, ignoring the chapter time
+`1247`. Cover the resulting countdown and skip behavior, as well as malformed
+ranges. Do not wait for the live AI to generate the same answer again.
+
+A controlled Chrome DOM fixture can additionally verify parsing or rendering.
+Label it as a fixture check: it does not verify the current YouTube integration.
+Record which checks passed and whether a live installed-extension check was
+performed. A focused parser fix can be validated with regression tests and a
+Chrome fixture when its live AI response cannot be reproduced; changes to
+YouTube selectors still need a check against the current page.
