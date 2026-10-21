@@ -1,6 +1,6 @@
 {
   "name": "yt-ad-skip",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Skip sponsor and fundraising segments on YouTube with a cancellable countdown.",
   "license": "MIT",
