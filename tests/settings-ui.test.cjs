@@ -18,7 +18,7 @@ for (const [language, title, firstLabel, cancelDurationLabel] of [
         assert.equal(h.mainFields.children[0].querySelector('label').textContent, firstLabel);
         assert.equal(h.input('autoSkipDelay').parentElement.querySelector('label').textContent, cancelDurationLabel);
         assert.equal(h.input('debug').type, 'checkbox');
-        assert.equal(h.input('debug').checked, true);
+        assert.equal(h.input('debug').checked, false);
         for (const [key, field] of Object.entries(h.settings.FIELDS)) {
             const input = h.input(key);
             assert.equal(input.value, String(Math.max(Math.ceil(field.min / 1000), Math.round(field.default / 1000))));
@@ -112,19 +112,19 @@ test('storage write errors retain user input and re-enable controls', () => {
     assert.ok(h.status.textContent.startsWith('Could not save settings.'));
 });
 
-test('debug can be saved off, restored on reopening, and reset to its default', () => {
+test('debug can be enabled, restored on reopening, and reset to its disabled default', () => {
     const h = loadSettingsUI({ stored: { ytAutoTimestampsSettings: { closeDelay: 2500 } } });
-    assert.equal(h.input('debug').checked, true);
-    h.input('debug').checked = false;
+    assert.equal(h.input('debug').checked, false);
+    h.input('debug').checked = true;
     h.submit();
     const saved = h.storage[h.settings.STORAGE_KEY];
-    assert.equal(saved.debug, false);
+    assert.equal(saved.debug, true);
     assert.equal(saved.closeDelay, 3000);
     const reopened = loadSettingsUI({ stored: h.storage });
-    assert.equal(reopened.input('debug').checked, false);
-    reopened.reset.click();
     assert.equal(reopened.input('debug').checked, true);
-    assert.equal(reopened.storage[h.settings.STORAGE_KEY].debug, true);
+    reopened.reset.click();
+    assert.equal(reopened.input('debug').checked, false);
+    assert.equal(reopened.storage[h.settings.STORAGE_KEY].debug, false);
 });
 
 test('editing a value clears previous save status', () => {

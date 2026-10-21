@@ -11,6 +11,8 @@ vm.runInContext(settingsSource, context);
 const { DEFAULTS, FIELDS, normalize } = context.YtAdSkipSettings;
 
 test('missing, malformed, and partial stored settings preserve existing defaults', () => {
+    assert.equal(DEFAULTS.closeDelay, 5000);
+    assert.equal(normalize({ closeDelay: 10000 }).closeDelay, 10000);
     for (const input of [undefined, null, 'bad data', []]) {
         assert.equal(JSON.stringify(normalize(input)), JSON.stringify(DEFAULTS));
     }
@@ -32,7 +34,7 @@ test('out-of-range and nonnumeric delay values cannot reach timers', () => {
 });
 
 test('debug settings preserve booleans and use the current default for old or malformed values', () => {
-    assert.equal(DEFAULTS.debug, true);
+    assert.equal(DEFAULTS.debug, false);
     assert.equal(normalize({ debug: true }).debug, true);
     assert.equal(normalize({ debug: false }).debug, false);
     for (const debug of [undefined, null, 'false', 0, 1, {}]) {

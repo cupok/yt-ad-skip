@@ -15,6 +15,7 @@ for (const [language, sponsor, fundraising] of [
         assert.ok(prompt.includes(`[FUNDRAISING] ${fundraising}: (START – END)`));
         assert.ok(prompt.includes('explicit requests to donate or raise money'));
         assert.ok(prompt.includes('ordinary discussions of fundraising'));
+        assert.ok(prompt.includes('Do not add a leading chapter timestamp or repeat the start timestamp before the marker.'));
     });
 
     test(`${language}: parsing accepts fundraising labels and markers alongside sponsors`, () => {
@@ -60,11 +61,11 @@ for (const [language, sponsor, fundraising] of [
         await h.advance(1200);
         assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":120,"end":150}]');
         assert.equal(h.extension.button.style.display, 'block');
-        await h.advance(5000);
-        assert.equal(player.currentTime, 150);
         await h.advance(4999);
+        assert.equal(player.currentTime, 125);
         assert.equal(close.clickCount, 0);
         await h.advance(1);
+        assert.equal(player.currentTime, 150);
         assert.equal(close.clickCount, 1);
     });
 }

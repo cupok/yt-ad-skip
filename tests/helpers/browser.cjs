@@ -39,6 +39,17 @@ function createDOM() {
             this.rects = [{}];
             this.clickCount = 0;
             this.value = '';
+            this.animations = [];
+        }
+        animate(keyframes, options) {
+            const animation = {
+                keyframes, options, currentTime: 0, playState: 'running',
+                pause() { this.playState = 'paused'; },
+                play() { this.playState = 'running'; },
+                cancel() { this.playState = 'idle'; },
+            };
+            this.animations.push(animation);
+            return animation;
         }
         setAttribute(key, value) { this.attributes.set(key, String(value)); }
         getAttribute(key) { return this.attributes.get(key) ?? null; }

@@ -140,6 +140,11 @@ their installed files, reload the extension, and refresh YouTube tabs to update.
 - Confirm the close delay begins after a new response settles and old chat
   history cannot trigger it. A timeout should leave chat open.
 - Confirm the cancellation countdown updates and auto-skip occurs on expiry.
+- Confirm the fill animates smoothly. Pause partway through the countdown, wait
+  longer than the remaining delay, and confirm neither the countdown nor playback
+  advances. Resume and confirm skipping waits for the remaining delay.
+- Check a fresh profile or reset defaults: chat closure defaults to 5 seconds,
+  and console debug logging is off.
 - Cancel one segment, seek back into it, and confirm it stays canceled. Other
   segments should still auto-skip. Check the keyboard shortcut as well.
 - Toggle console debug. Export logs only with the explicit button.

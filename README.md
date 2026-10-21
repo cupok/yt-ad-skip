@@ -47,8 +47,10 @@ automatically when a GitHub release is published.
 4. When playback reaches a marked segment, **Cancel auto-skip (5s)** counts down.
    Click it to keep watching that segment; otherwise playback jumps to its end.
 
-The cancellation window uses elapsed real time. Playback events do not restart
-it. Canceling one segment does not disable skipping for other segments.
+The cancellation window uses elapsed real time, pauses with the video, and
+resumes with the time remaining. Playback events do not restart it. The button's
+fill animates continuously. Canceling one segment does not disable skipping for
+other segments.
 
 You can also skip the current marked segment immediately:
 
@@ -67,10 +69,10 @@ page uses the browser's preferred supported language.
 | Setting | Purpose |
 | --- | --- |
 | Open chat after | Delay before opening the timestamp chat. |
-| Close chat after | Delay after a new AI timestamp response settles. Further response mutations restart it. |
+| Close chat after | Delay after a new AI timestamp response settles; defaults to 5 seconds. Further response mutations restart it. |
 | Cancel button duration | Time to cancel before automatically skipping. `0` disables auto-skip and hides the button. |
 | Advanced timing | Retry delay, chat-input timeout, response timeout, and response settling delay. |
-| Debug logging | Enable or disable browser console diagnostics. |
+| Debug logging | Enable or disable browser console diagnostics; off by default. |
 
 Timing fields use whole seconds in the UI. Existing fractional values are rounded
 for display. Saved settings apply to open tabs; most existing timers finish with
