@@ -9,6 +9,8 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-20
+
 ### Added
 
 - AI-generated timestamp detection for sponsor segments, paid advertisements,
