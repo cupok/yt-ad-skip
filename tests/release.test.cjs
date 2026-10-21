@@ -19,6 +19,13 @@ async function fixture(t) {
     for (const file of [...RELEASE_FILES, 'package.json']) {
         cpSync(path.join(repository, file), path.join(root, file));
     }
+    // Exercise releases from a fixed baseline, independent of the real version.
+    for (const file of ['manifest.json', 'package.json']) {
+        const filename = path.join(root, file);
+        const metadata = JSON.parse(readFileSync(filename, 'utf8'));
+        metadata.version = '1.0.0';
+        writeFileSync(filename, `${JSON.stringify(metadata, null, 2)}\n`);
+    }
     writeFileSync(path.join(root, 'CHANGELOG.md'), '# Changelog\n\n## [Unreleased]\n\n### Added\n\n- A useful feature.\n');
     return root;
 }

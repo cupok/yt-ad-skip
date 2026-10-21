@@ -9,6 +9,8 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-21
+
 ### Fixed
 
 - Sponsor and fundraising ranges are recognized when an AI response adds a
