@@ -24,11 +24,16 @@ test('the cancel button shows countdown progress and reuses the existing button'
     h.player.currentTime = 30;
     h.extension.updateSkipButton(h.player);
     const button = h.extension.button;
-    assert.ok(button.style.background.includes('0%'));
+    const animation = button.animations[0];
+    assert.equal(animation.keyframes[0].backgroundSize, '0% 100%');
+    assert.equal(animation.keyframes[1].backgroundSize, '100% 100%');
+    assert.equal(animation.options.duration, 5000);
+    assert.equal(animation.options.easing, 'linear');
     await h.advance(2500);
     h.extension.updateSkipButton(h.player);
     assert.equal(h.extension.button, button);
-    assert.ok(button.style.background.includes('50%'));
+    assert.equal(button.animations.length, 1);
+    assert.equal(animation.playState, 'running');
     assert.equal(button.textContent, 'Cancel auto-skip (3s)');
     assert.equal(h.container.children.length, 1);
 });
@@ -37,7 +42,201 @@ test('the alternate progress style fills the remaining part', () => {
     const h = setup({ fillGrows: false });
     h.player.currentTime = 30;
     h.extension.updateSkipButton(h.player);
-    assert.ok(h.extension.button.style.background.includes('100%'));
+    const animation = h.extension.button.animations[0];
+    assert.equal(animation.keyframes[0].backgroundSize, '100% 100%');
+    assert.equal(animation.keyframes[1].backgroundSize, '0% 100%');
+});
+
+test('pausing freezes the fill and exact remaining delay, then resumes without restarting', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.updateSkipButton(h.player);
+    const animation = h.extension.button.animations[0];
+    await h.advance(1250);
+    const oldTick = [...h.timers.values()][0].callback;
+    h.player.paused = true;
+    h.player.dispatchEvent(new h.Event('pause'));
+    assert.equal(animation.playState, 'paused');
+    assert.equal(animation.currentTime, 1250);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (4s)');
+    assert.equal(h.timers.size, 0);
+    await h.advance(10000);
+    h.player.dispatchEvent(new h.Event('timeupdate'));
+    assert.equal(h.player.currentTime, 45);
+    assert.equal(animation.currentTime, 1250);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (4s)');
+    h.player.paused = false;
+    h.player.dispatchEvent(new h.Event('play'));
+    oldTick();
+    assert.equal(animation.playState, 'running');
+    assert.equal(animation.currentTime, 1250);
+    assert.equal(h.extension.button.animations.length, 1);
+    assert.equal(h.timers.size, 1);
+    await h.advance(3749);
+    assert.equal(h.player.currentTime, 45);
+    await h.advance(1);
+    assert.equal(h.player.currentTime, 60);
+    assert.equal(animation.playState, 'idle');
+    assert.equal(h.timers.size, 0);
+});
+
+test('a segment discovered while paused waits for playback before starting its countdown', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.player.paused = true;
+    h.extension.updateSkipButton(h.player);
+    const animation = h.extension.button.animations[0];
+    assert.equal(animation.playState, 'paused');
+    assert.equal(animation.currentTime, 0);
+    assert.equal(h.timers.size, 0);
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 45);
+    h.player.paused = false;
+    h.player.dispatchEvent(new h.Event('play'));
+    await h.advance(4999);
+    assert.equal(h.player.currentTime, 45);
+    await h.advance(1);
+    assert.equal(h.player.currentTime, 60);
+});
+
+test('repeated pause and play events preserve elapsed time across multiple pauses', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.updateSkipButton(h.player);
+    for (let i = 0; i < 2; i++) {
+        await h.advance(1500);
+        h.player.paused = true;
+        h.player.dispatchEvent(new h.Event('pause'));
+        await h.advance(10000);
+        h.player.dispatchEvent(new h.Event('pause'));
+        h.player.dispatchEvent(new h.Event('timeupdate'));
+        assert.equal(h.player.currentTime, 45);
+        assert.equal(h.timers.size, 0);
+        h.player.paused = false;
+        h.player.dispatchEvent(new h.Event('play'));
+        h.player.dispatchEvent(new h.Event('play'));
+        assert.equal(h.timers.size, 1);
+    }
+    await h.advance(1999);
+    assert.equal(h.player.currentTime, 45);
+    await h.advance(1);
+    assert.equal(h.player.currentTime, 60);
+});
+
+test('an expiring timer cannot skip a paused video even before its pause event arrives', async () => {
+    const h = setup();
+    h.extension.updateSkipButton(h.player);
+    await h.advance(4999);
+    h.player.paused = true;
+    await h.advance(10001);
+    assert.equal(h.player.currentTime, 45);
+    assert.equal(h.extension.button.animations[0].playState, 'paused');
+    assert.equal(h.timers.size, 0);
+});
+
+test('canceling while paused stays canceled after resuming', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.updateSkipButton(h.player);
+    await h.advance(1500);
+    h.player.paused = true;
+    h.player.dispatchEvent(new h.Event('pause'));
+    const animation = h.extension.button.animations[0];
+    h.extension.button.click();
+    assert.equal(animation.playState, 'idle');
+    h.player.paused = false;
+    h.player.dispatchEvent(new h.Event('play'));
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 45);
+    assert.equal(h.extension.button.style.display, 'none');
+    assert.equal(h.timers.size, 0);
+});
+
+test('seeking to another segment while paused starts a fresh frozen countdown', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.updateSkipButton(h.player);
+    await h.advance(1500);
+    const oldAnimation = h.extension.button.animations[0];
+    h.player.paused = true;
+    h.player.dispatchEvent(new h.Event('pause'));
+    h.player.currentTime = 100;
+    h.player.dispatchEvent(new h.Event('seeked'));
+    const animation = h.extension.button.animations[1];
+    assert.equal(oldAnimation.playState, 'idle');
+    assert.equal(animation.playState, 'paused');
+    assert.equal(animation.currentTime, 0);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 100);
+    h.player.paused = false;
+    h.player.dispatchEvent(new h.Event('play'));
+    await h.advance(4999);
+    assert.equal(h.player.currentTime, 100);
+    await h.advance(1);
+    assert.equal(h.player.currentTime, 120);
+});
+
+test('recreating a paused button preserves progress and cancels its old animation', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.updateSkipButton(h.player);
+    await h.advance(1250);
+    h.player.paused = true;
+    h.player.dispatchEvent(new h.Event('pause'));
+    const oldButton = h.extension.button;
+    oldButton.remove();
+    await h.advance(5000);
+    h.extension.updateSkipButton(h.player);
+    assert.equal(oldButton.animations[0].playState, 'idle');
+    const animation = h.extension.button.animations[0];
+    assert.equal(animation.playState, 'paused');
+    assert.equal(animation.currentTime, 1250);
+    assert.equal(h.timers.size, 0);
+});
+
+test('changing the duration while paused restarts the countdown but leaves it paused', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.bindSettingsChanges();
+    h.extension.updateSkipButton(h.player);
+    await h.advance(1500);
+    h.player.paused = true;
+    h.player.dispatchEvent(new h.Event('pause'));
+    h.changeSettings({ autoSkipDelay: 7000 });
+    const [oldAnimation, animation] = h.extension.button.animations;
+    assert.equal(oldAnimation.playState, 'idle');
+    assert.equal(animation.playState, 'paused');
+    assert.equal(animation.options.duration, 7000);
+    assert.equal(animation.currentTime, 0);
+    assert.equal(h.extension.button.textContent, 'Cancel auto-skip (7s)');
+    assert.equal(h.timers.size, 0);
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 45);
+    h.player.paused = false;
+    h.player.dispatchEvent(new h.Event('play'));
+    await h.advance(6999);
+    assert.equal(h.player.currentTime, 45);
+    await h.advance(1);
+    assert.equal(h.player.currentTime, 60);
+});
+
+test('navigation cancels a frozen countdown and its animation without reviving old ticks', async () => {
+    const h = setup();
+    h.extension.bindPlayerEvents(h.player);
+    h.extension.updateSkipButton(h.player);
+    const oldTick = [...h.timers.values()][0].callback;
+    const button = h.extension.button;
+    await h.advance(1250);
+    h.player.paused = true;
+    h.player.dispatchEvent(new h.Event('pause'));
+    h.extension.reset();
+    oldTick();
+    await h.advance(10000);
+    assert.equal(h.player.currentTime, 45);
+    assert.equal(button.isConnected, false);
+    assert.equal(button.animations[0].playState, 'idle');
+    assert.equal(h.timers.size, 0);
 });
 
 test('clicking cancel leaves the current segment playing and stops its countdown', async () => {

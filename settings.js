@@ -3,7 +3,7 @@
     const STORAGE_KEY = 'ytAutoTimestampsSettings';
     const FIELDS = Object.freeze({
         chatOpenDelay: { default: 1000, min: 0, max: 600000 },
-        closeDelay: { default: 10000, min: 0, max: 600000 },
+        closeDelay: { default: 5000, min: 0, max: 600000 },
         autoSkipDelay: { default: 5000, min: 0, max: 600000 },
         chatOpenRetryDelay: { default: 2000, min: 100, max: 600000 },
         chatTextareaTimeout: { default: 10000, min: 1000, max: 600000 },
@@ -12,7 +12,7 @@
     });
     const DEFAULTS = Object.freeze({
         ...Object.fromEntries(Object.entries(FIELDS).map(([key, field]) => [key, field.default])),
-        debug: true,
+        debug: false,
     });
 
     function normalize(value) {

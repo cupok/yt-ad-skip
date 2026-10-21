@@ -106,9 +106,9 @@ test('an answer without sponsors closes normally without warning', async () => {
     runTimers(1200);
     assert.equal(logs.some(({ level }) => level === 'warn' || level === 'error'), false);
     assert.equal(observers[0].disconnected, false);
-    assert.ok([...timers.values()].some(({ delay }) => delay === 10000));
+    assert.ok([...timers.values()].some(({ delay }) => delay === 5000));
     assert.equal([...timers.values()].some(({ delay }) => delay === 30000), false);
-    runTimers(10000);
+    runTimers(5000);
     assert.equal(observers[0].disconnected, true);
 });
 
@@ -165,10 +165,10 @@ test('changes use the local settings key and leave unrelated timers running', ()
     extension.bindSettingsChanges();
     extension.timestamps();
     changeSettings({ closeDelay: 3000 }, 'sync');
-    assert.equal(extension.settings.closeDelay, 10000);
+    assert.equal(extension.settings.closeDelay, 5000);
     changeSettings({ closeDelay: 3000 });
     assert.equal(extension.settings.closeDelay, 3000);
     assert.ok([...timers.values()].some(({ delay }) => delay === 1000));
     changeSettings(undefined);
-    assert.equal(extension.settings.closeDelay, 10000);
+    assert.equal(extension.settings.closeDelay, 5000);
 });

@@ -9,7 +9,7 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-10-20
+## [1.0.0] - 2026-10-21
 
 ### Added
 
@@ -24,11 +24,18 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ### Changed
 
+- Chat closes 5 seconds after a response settles by default, and console debug
+  logging is disabled by default. Existing saved settings are preserved.
+- The cancellation button's fill animates continuously throughout the countdown.
 - Chat closure waits for a new AI timestamp response to settle and restarts when
   more content arrives. Response timeouts leave the panel open.
 
 ### Fixed
 
+- Sponsor and fundraising ranges are recognized when an AI response repeats the
+  start time as a leading chapter timestamp before the marked range.
+- Pausing the video pauses the cancellation countdown and its animation. Playback
+  resumes the remaining countdown without skipping while paused.
 - Old chat history cannot start the closing countdown or reintroduce old ranges.
 - Normal startup conditions and answers without skippable segments are logged
   as informational diagnostics rather than extension warnings.

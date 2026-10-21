@@ -17,7 +17,10 @@ const BUTTON_STYLE = {
     borderRadius: '4px',
     font: '500 16px/1 sans-serif',
     cursor: 'pointer',
-    transition: 'background 0.3s linear',
+    backgroundColor: TRACK_COLOR,
+    backgroundImage: `linear-gradient(${FILL_COLOR}, ${FILL_COLOR})`,
+    backgroundPosition: 'left center',
+    backgroundRepeat: 'no-repeat',
 };
 
 // Debug
@@ -147,6 +150,7 @@ function getLogState() {
                 delay: settings.autoSkipDelay,
                 segmentKey: autoSkipSegmentKey,
                 deadline: autoSkipDeadline,
+                pausedAt: autoSkipPausedAt,
                 canceledSegments: [...canceledAutoSkipSegments],
             },
             fullscreen: {
@@ -391,6 +395,7 @@ Use strictly this format, keeping the markers ${SPONSOR_MARKER} and ${FUNDRAISIN
 - ${FUNDRAISING_MARKER} ${fundraising}: (START – END) ${topic}.
 Only use ${SPONSOR_MARKER} for clear sponsor or paid advertisement segments. Do not use it for ordinary topics or statements that there are no sponsors.
 Only use ${FUNDRAISING_MARKER} for explicit requests to donate or raise money, including charity appeals and donation drives. Do not use it for ordinary discussions of fundraising or statements that no donations are requested.
+For sponsor and fundraising lines, put the marker first and include exactly one start/end range. Do not add a leading chapter timestamp or repeat the start timestamp before the marker.
 Use timestamps with ASCII digits in M:SS or H:MM:SS format.`;
 }
 
@@ -400,12 +405,15 @@ let activePlayer = null;
 
 let started = false;
 let skipButton = null;
+let skipButtonAnimation = null;
 let lastSkipButtonSegmentKey = null;
 let segments = [];
 let autoSkipTimer = null;
 let autoSkipSegmentKey = null;
 let autoSkipStartedAt = null;
 let autoSkipDeadline = null;
+let autoSkipPausedAt = null;
+let autoSkipTick = null;
 let autoSkipGeneration = 0;
 const canceledAutoSkipSegments = new Set();
 
@@ -840,6 +848,12 @@ function cancelAutoSkip(reason, details = {}) {
     autoSkipSegmentKey = null;
     autoSkipStartedAt = null;
     autoSkipDeadline = null;
+    autoSkipPausedAt = null;
+    autoSkipTick = null;
+    if (skipButtonAnimation) {
+        skipButtonAnimation.cancel();
+        skipButtonAnimation = null;
+    }
     if (skipButton) {
         skipButton.style.display = 'none';
     }
@@ -854,12 +868,49 @@ function cancelAutoSkip(reason, details = {}) {
     }
 }
 
+function armAutoSkipTimer() {
+    if (autoSkipTimer || autoSkipPausedAt !== null || !autoSkipTick) {
+        return;
+    }
+
+    const tick = autoSkipTick;
+    const timer = setTimeout(() => {
+        // A callback already queued before pause/reset must not resume old work.
+        if (autoSkipTimer !== timer) {
+            return;
+        }
+        autoSkipTimer = null;
+        tick();
+    }, Math.min(1000, Math.max(0, autoSkipDeadline - Date.now())));
+    autoSkipTimer = timer;
+}
+
+function syncAutoSkipPlayback(video) {
+    const now = Date.now();
+    if (video.paused) {
+        if (autoSkipPausedAt === null) {
+            autoSkipPausedAt = now;
+        }
+        if (autoSkipTimer) {
+            clearTimeout(autoSkipTimer);
+            autoSkipTimer = null;
+        }
+    } else if (autoSkipPausedAt !== null) {
+        const pausedDuration = now - autoSkipPausedAt;
+        autoSkipStartedAt += pausedDuration;
+        autoSkipDeadline += pausedDuration;
+        autoSkipPausedAt = null;
+    }
+    armAutoSkipTimer();
+}
+
 function scheduleAutoSkip(video, segment, segmentKey) {
     if (settings.autoSkipDelay <= 0 || canceledAutoSkipSegments.has(segmentKey)) {
         return;
     }
 
     if (autoSkipSegmentKey === segmentKey) {
+        syncAutoSkipPlayback(video);
         return;
     }
 
@@ -884,12 +935,10 @@ function scheduleAutoSkip(video, segment, segmentKey) {
         currentTime: video.currentTime,
     });
 
-    const tick = () => {
+    autoSkipTick = () => {
         if (!isCurrentRun(localRunId) || generation !== autoSkipGeneration) {
             return;
         }
-        autoSkipTimer = null;
-
         const currentSegment = findCurrentSegment(video);
         const currentSegmentKey = currentSegment
             ? `${currentSegment.start}-${currentSegment.end}`
@@ -918,9 +967,8 @@ function scheduleAutoSkip(video, segment, segmentKey) {
         }
 
         const remaining = autoSkipDeadline - Date.now();
-        if (remaining > 0) {
+        if (remaining > 0 || video.paused) {
             updateSkipButton(video);
-            autoSkipTimer = setTimeout(tick, Math.min(1000, remaining));
             return;
         }
 
@@ -945,7 +993,7 @@ function scheduleAutoSkip(video, segment, segmentKey) {
         });
     };
 
-    autoSkipTimer = setTimeout(tick, Math.min(1000, settings.autoSkipDelay));
+    syncAutoSkipPlayback(video);
 }
 
 function getStartBlockReasons(video) {
@@ -1008,6 +1056,7 @@ function bindPlayerEvents(player) {
         'loadedmetadata',
         'durationchange',
         'play',
+        'pause',
         'timeupdate',
         'seeking',
         'seeked',
@@ -1435,6 +1484,14 @@ async function watchForAnswer(localRunId) {
 }
 
 // Parsing
+function timestampTextToSeconds(timestamp) {
+    const parts = timestamp.split(':').map(Number);
+    if (parts.slice(1).some(part => part > 59)) {
+        return NaN;
+    }
+    return parts.reduce((seconds, part) => seconds * 60 + part, 0);
+}
+
 function parseSegments() {
     const found = [];
     const chat = document.querySelector(chatSelector);
@@ -1506,8 +1563,21 @@ function parseSegments() {
             return;
         }
 
-        const start = times[0];
-        const end = times[1];
+        let rangeOffset = 0;
+        if (times.length === 3 && times[0] === times[1]) {
+            // AI may prefix a range with its chapter time, e.g.
+            // (19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36).
+            // Only discard that duplicate when the displayed range agrees with
+            // the linked timestamps; an unrelated later link is not an endpoint.
+            const repeatedRange = /^\((\d+:\d{2}(?::\d{2})?)\)\s+.*?\(\1\s*[–—-]\s*(\d+:\d{2}(?::\d{2})?)\)/.exec(text);
+            if (repeatedRange
+                && timestampTextToSeconds(repeatedRange[1]) === times[1]
+                && timestampTextToSeconds(repeatedRange[2]) === times[2]) {
+                rangeOffset = 1;
+            }
+        }
+        const start = times[rangeOffset];
+        const end = times[rangeOffset + 1];
 
         if (end <= start) {
             stats.invalidRangeCount++;
@@ -1552,6 +1622,10 @@ function updateSkipButton(video) {
             video: describeVideo(video),
         });
         skipButton = null;
+        if (skipButtonAnimation) {
+            skipButtonAnimation.cancel();
+            skipButtonAnimation = null;
+        }
         lastSkipButtonSegmentKey = null;
     }
 
@@ -1623,15 +1697,35 @@ function updateSkipButton(video) {
         });
     }
 
-    let progress = (Date.now() - autoSkipStartedAt) / (autoSkipDeadline - autoSkipStartedAt);
+    const countdownNow = autoSkipPausedAt ?? Date.now();
+    const elapsed = Math.max(0, countdownNow - autoSkipStartedAt);
+    const duration = autoSkipDeadline - autoSkipStartedAt;
+    let progress = elapsed / duration;
     progress = Math.min(1, Math.max(0, progress));
 
     const percent = (FILL_GROWS ? progress : 1 - progress) * 100;
 
-    skipButton.style.background = `linear-gradient(to right, ${FILL_COLOR} ${percent}%, ${TRACK_COLOR} ${percent}%)`;
+    if (!skipButtonAnimation) {
+        // Animate a numeric background size: gradient stops themselves do not
+        // interpolate smoothly when replaced by the once-per-second timer.
+        skipButtonAnimation = skipButton.animate([
+            { backgroundSize: `${FILL_GROWS ? 0 : 100}% 100%` },
+            { backgroundSize: `${FILL_GROWS ? 100 : 0}% 100%` },
+        ], { duration, easing: 'linear', fill: 'both' });
+        skipButtonAnimation.currentTime = Math.min(duration, elapsed);
+    }
+    // Let the browser advance the fill between events. Only seek its animation
+    // when playback pauses/resumes, rather than restarting it on every update.
+    if (autoSkipPausedAt !== null) {
+        skipButtonAnimation.pause();
+        skipButtonAnimation.currentTime = Math.min(duration, elapsed);
+    } else if (skipButtonAnimation.playState === 'paused') {
+        skipButtonAnimation.currentTime = Math.min(duration, elapsed);
+        skipButtonAnimation.play();
+    }
     skipButton.lang = userLanguage;
     skipButton.dir = 'auto';
-    const remainingSeconds = Math.max(0, Math.ceil((autoSkipDeadline - Date.now()) / 1000));
+    const remainingSeconds = Math.max(0, Math.ceil((autoSkipDeadline - countdownNow) / 1000));
     const { cancelAutoSkip: cancelLabel, secondsUnit } = getTranslations();
     skipButton.textContent = `${cancelLabel} (${remainingSeconds}${secondsUnit})`;
 

@@ -139,8 +139,8 @@ test('answer mutations debounce parsing until the configured pause', async () =>
     await h.advance(1);
     assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":30,"end":60}]');
     assert.equal(observer.disconnected, false);
-    assert.deepEqual([...h.timers.values()].map(({ delay }) => delay), [10000]);
-    await h.advance(10000);
+    assert.deepEqual([...h.timers.values()].map(({ delay }) => delay), [5000]);
+    await h.advance(5000);
     assert.equal(observer.disconnected, true);
 });
 
@@ -178,6 +178,55 @@ test('parsing normalizes whitespace and keeps multiple valid sponsor ranges', ()
     assert.equal(JSON.stringify(h.extension.parseSegments()), '[{"start":30,"end":60},{"start":120,"end":150}]');
 });
 
+for (const marker of ['SPONSOR', 'FUNDRAISING']) {
+    test(`${marker}: a repeated leading timestamp still produces a working skip button`, async () => {
+        const h = loadContent();
+        const video = h.video({ currentTime: 1150, duration: 2000 });
+        h.extension.setActivePlayer(video);
+        h.setChat([{
+            text: `(19:07) [${marker}] Sponsor segment: (19:07 – 20:36) Hills Pet Nutrition.`,
+            times: [1147, 1147, 1236],
+        }]);
+        await h.extension.watchForAnswer(0);
+        await h.advance(1200);
+        assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":1147,"end":1236}]');
+        assert.equal(h.extension.button.style.display, 'block');
+        assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
+        await h.advance(4999);
+        assert.equal(video.currentTime, 1150);
+        await h.advance(1);
+        assert.equal(video.currentTime, 1236);
+    });
+}
+
+test('repeated-start parsing supports hour timestamps and excludes old chat history', () => {
+    const h = loadContent();
+    const old = { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1147, 1147, 1236] };
+    h.setChat([old]);
+    h.extension.ignoreExistingLines();
+    h.setChat([old, {
+        text: '(1:19:07) [FUNDRAISING] Збір коштів: (1:19:07 — 1:20:36)',
+        times: [4747, 4747, 4836],
+    }]);
+    assert.equal(JSON.stringify(h.extension.parseSegments()), '[{"start":4747,"end":4836}]');
+});
+
+test('a duplicate start never turns invalid ranges or unrelated timestamps into a segment', () => {
+    const h = loadContent();
+    h.setChat([
+        { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 19:07) Later (20:36)', times: [1147, 1147, 1236] },
+        { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 18:00)', times: [1147, 1147, 1080] },
+        { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1147, 1147] },
+        { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1147, 1147, 1500] },
+        { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36)', times: [1147, 1147, 'oops'] },
+        { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 20:99)', times: [1147, 1147, 1299] },
+        { text: '(19:07) [SPONSOR] Sponsor segment: (19:07 – 20:36) Another (25:00)', times: [1147, 1147, 1236, 1500] },
+        { text: '(19:07) [SPONSOR] No end provided. Next chapter (20:36)', times: [1147, 1147, 1236] },
+        { text: '(19:07) Ordinary topic: (19:07 – 20:36)', times: [1147, 1147, 1236] },
+    ]);
+    assert.equal(h.extension.parseSegments().length, 0);
+});
+
 test('chat closing skips hidden and disabled buttons and finds a usable button', () => {
     const h = loadContent();
     const root = h.fullscreen();
@@ -209,11 +258,11 @@ test('rescheduling chat close replaces the previous countdown', async () => {
     h.fullscreen();
     const button = h.mount(h.SELECTORS.close, new h.HTMLElement('button'));
     h.extension.scheduleChatClose(0, 'first');
-    await h.advance(5000);
+    await h.advance(2500);
     h.extension.scheduleChatClose(0, 'second');
-    await h.advance(5000);
+    await h.advance(4999);
     assert.equal(button.clickCount, 0);
-    await h.advance(5000);
+    await h.advance(1);
     assert.equal(button.clickCount, 1);
 });
 
@@ -261,13 +310,13 @@ for (const sponsor of [false, true]) {
         h.setChat([old]);
         observer.notify([{ type: 'childList' }]);
         await h.advance(1200);
-        assert.equal([...h.timers.values()].some(timer => timer.delay === 10000), false);
+        assert.equal([...h.timers.values()].some(timer => timer.delay === 5000), false);
 
         h.setChat([old, { text: '[SPONSOR] New answer (2:00 – 2:30)', times: [120, 150] }]);
         observer.notify([{ type: 'childList' }]);
         await h.advance(1200);
         assert.equal(JSON.stringify(h.extension.state.segments), '[{"start":120,"end":150}]');
-        await h.advance(9999);
+        await h.advance(4999);
         assert.equal(close.clickCount, 0);
         await h.advance(1);
         assert.equal(close.clickCount, 1);
@@ -285,13 +334,13 @@ for (const sponsor of [false, true]) {
         await h.extension.watchForAnswer(0);
         const observer = h.observers.find(item => item.target === chat);
         await h.advance(1200);
-        await h.advance(9000);
+        await h.advance(4000);
         h.setChat([first, { text: '[SPONSOR] (2:00 – 2:30)', times: [120, 150] }]);
         observer.notify([{ type: 'childList' }]);
         await h.advance(1200);
         assert.equal(close.clickCount, 0);
         assert.equal(h.extension.state.segments.length, sponsor ? 2 : 1);
-        await h.advance(9999);
+        await h.advance(4999);
         assert.equal(close.clickCount, 0);
         await h.advance(1);
         assert.equal(close.clickCount, 1);
@@ -342,7 +391,7 @@ test('a response arriving just before the wait timeout gets the full close delay
     h.observers.find(item => item.target === chat).notify([{ type: 'childList' }]);
     await h.advance(1200);
     assert.equal(close.clickCount, 0);
-    await h.advance(9999);
+    await h.advance(4999);
     assert.equal(close.clickCount, 0);
     await h.advance(1);
     assert.equal(close.clickCount, 1);
