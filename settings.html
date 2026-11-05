@@ -22,24 +22,29 @@
                     <summary data-i18n="advanced">Advanced timing</summary>
                     <div id="advanced-fields" class="fields"></div>
                 </details>
-                <div class="field debug-setting">
-                    <div>
-                        <label for="debug" data-i18n="debug">Debug logging</label>
-                        <p id="debug-hint" data-i18n="debugHint">Show diagnostic messages in the browser console.</p>
+                <details id="debug-settings">
+                    <summary data-i18n="debugSection">Debug settings</summary>
+                    <div class="field debug-setting">
+                        <div>
+                            <label for="debug" data-i18n="debug">Debug logging</label>
+                            <p id="debug-hint" data-i18n="debugHint">Show diagnostic messages in the browser console.</p>
+                        </div>
+                        <input type="checkbox" id="debug" name="debug" role="switch" aria-describedby="debug-hint">
                     </div>
-                    <input type="checkbox" id="debug" name="debug" role="switch" aria-describedby="debug-hint">
-                </div>
-                <div class="actions">
-                    <button type="submit" class="primary" data-i18n="save">Save settings</button>
-                    <button type="button" id="reset" data-i18n="reset">Reset defaults</button>
+                    <div class="troubleshooting">
+                        <span data-i18n="logs">Troubleshooting</span>
+                        <button type="button" id="export" data-i18n="export">Export logs</button>
+                    </div>
+                </details>
+                <div class="action-bar">
+                    <div class="actions">
+                        <button type="submit" class="primary" data-i18n="save">Save settings</button>
+                        <button type="button" id="reset" data-i18n="reset">Reset defaults</button>
+                    </div>
+                    <p id="status" role="status" aria-live="polite"></p>
                 </div>
             </fieldset>
         </form>
-        <p id="status" role="status" aria-live="polite"></p>
-        <footer>
-            <span data-i18n="logs">Troubleshooting</span>
-            <button type="button" id="export" data-i18n="export">Export logs</button>
-        </footer>
     </main>
 </body>
 </html>
