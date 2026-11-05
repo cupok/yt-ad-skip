@@ -9,6 +9,8 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-05
+
 ### Changed
 
 - Save settings and Reset defaults stay visible in a fixed bottom bar. Debug
