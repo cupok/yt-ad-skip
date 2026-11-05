@@ -2,6 +2,18 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { loadContent } = require('./helpers/content.cjs');
 
+for (const [minimum, duration, starts] of [[300000, 299, false], [300000, 300, true], [0, 60, true]]) {
+    test(`saved video minimum ${minimum / 1000}s controls startup for a ${duration}s video`, async () => {
+        const h = loadContent({ storedSettings: { minVideoLength: minimum } });
+        await h.extension.loadSettings();
+        h.fullscreen();
+        const video = h.video({ duration });
+        h.extension.bindPlayerEvents(video);
+        video.dispatchEvent(new h.Event('play'));
+        assert.equal(h.extension.state.started, starts);
+    });
+}
+
 for (const [name, properties, fullscreen, reason] of [
     ['outside fullscreen', {}, false, 'not-fullscreen'],
     ['a video that is not ready', { readyState: 2 }, true, 'ready-state-2'],

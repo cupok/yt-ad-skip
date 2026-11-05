@@ -7,15 +7,15 @@ for (const [language, title, firstLabel, cancelDurationLabel] of [
     ['uk-UA', 'Налаштування', 'Відкрити чат через', 'Час показу кнопки скасування'],
     ['ru-RU', 'Настройки', 'Открыть чат через', 'Время показа кнопки отмены'],
 ]) {
-    test(`${language}: settings renders localized headings and all seven delay controls`, () => {
+    test(`${language}: settings renders localized headings and all nine numeric controls`, () => {
         const h = loadSettingsUI({ languages: [language] });
         assert.equal(h.document.documentElement.lang, language.slice(0, 2));
         assert.equal(h.document.title, `YT Ad Skip · ${title}`);
         const translated = h.document.querySelectorAll('[data-i18n]');
         assert.ok(translated.every(element => typeof element.textContent === 'string' && element.textContent.length > 0));
-        assert.equal(h.mainFields.children.length, 3);
+        assert.equal(h.mainFields.children.length, 5);
         assert.equal(h.advancedFields.children.length, 4);
-        assert.equal(h.mainFields.children[0].querySelector('label').textContent, firstLabel);
+        assert.equal(h.input('chatOpenDelay').parentElement.querySelector('label').textContent, firstLabel);
         assert.equal(h.input('autoSkipDelay').parentElement.querySelector('label').textContent, cancelDurationLabel);
         assert.equal(h.input('debug').type, 'checkbox');
         assert.equal(h.input('debug').checked, false);
@@ -52,15 +52,31 @@ test('saving converts seconds to milliseconds and preserves a disabled auto-skip
     const h = loadSettingsUI();
     h.input('chatOpenDelay').value = '2';
     h.input('autoSkipDelay').value = '0';
+    h.input('minVideoLength').value = '900';
+    h.input('minSegmentLength').value = '16';
     const event = h.submit();
     assert.equal(event.defaultPrevented, true);
     const saved = h.storage[h.settings.STORAGE_KEY];
     assert.equal(saved.chatOpenDelay, 2000);
     assert.equal(saved.autoSkipDelay, 0);
+    assert.equal(saved.minVideoLength, 900000);
+    assert.equal(saved.minSegmentLength, 16000);
     assert.equal(saved.answerStableDelay, 1000);
     assert.equal(h.writes.length, 1);
     assert.equal(h.status.dataset.error, 'false');
     assert.ok(h.status.textContent.startsWith('Saved.'));
+});
+
+test('length settings are adjacent, persist on reopening, and accept zero', () => {
+    const h = loadSettingsUI();
+    assert.equal(h.mainFields.children[0], h.input('minVideoLength').parentElement);
+    assert.equal(h.mainFields.children[1], h.input('minSegmentLength').parentElement);
+    h.input('minVideoLength').value = '0';
+    h.input('minSegmentLength').value = '0';
+    h.submit();
+    const reopened = loadSettingsUI({ stored: h.storage });
+    assert.equal(reopened.input('minVideoLength').value, '0');
+    assert.equal(reopened.input('minSegmentLength').value, '0');
 });
 
 test('saving disables controls until the write callback succeeds', () => {
