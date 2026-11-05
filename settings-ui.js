@@ -7,10 +7,12 @@
             advanced: 'Advanced timing', save: 'Save settings', reset: 'Reset defaults',
             logs: 'Troubleshooting', export: 'Export logs',
             debug: 'Debug logging', debugHint: 'Show diagnostic messages in the browser console.',
-            saved: 'Saved. New timers will use these settings.',
+            saved: 'Saved. Skip limits apply now; new timers use these settings.',
             restored: 'Default settings restored.', loadError: 'Could not load settings. Reopen this window to try again.',
             saveError: 'Could not save settings. Please try again.',
             exported: 'Log export requested.', exportError: 'Could not export logs. Please try again.',
+            minVideoLength: ['Minimum video length', 'Only analyze and skip in videos at least this long. Default: 180 seconds. Set to 0 for any length.'],
+            minSegmentLength: ['Minimum segment length', 'Only skip sponsor, ad, and fundraising segments at least this long. Default: 20 seconds. Set to 0 for any length.'],
             chatOpenDelay: ['Open chat after', 'Wait before opening the timestamp chat.'],
             closeDelay: ['Close chat after', 'Wait after the AI response settles before closing the chat.'],
             autoSkipDelay: ['Cancel button duration', 'Seconds to cancel before the segment is skipped. Pauses with the video. Set to 0 to disable automatic skipping.'],
@@ -24,10 +26,12 @@
             advanced: 'Додаткові затримки', save: 'Зберегти', reset: 'Відновити типові',
             logs: 'Діагностика', export: 'Експортувати журнал',
             debug: 'Налагоджувальні повідомлення', debugHint: 'Показувати діагностичні повідомлення в консолі браузера.',
-            saved: 'Збережено. Нові таймери використовуватимуть ці налаштування.',
+            saved: 'Збережено. Обмеження пропуску діють одразу, затримки — для нових таймерів.',
             restored: 'Типові налаштування відновлено.', loadError: 'Не вдалося завантажити налаштування. Відкрийте це вікно знову.',
             saveError: 'Не вдалося зберегти налаштування. Спробуйте ще раз.',
             exported: 'Експорт журналу запитано.', exportError: 'Не вдалося експортувати журнал. Спробуйте ще раз.',
+            minVideoLength: ['Мінімальна тривалість відео', 'Аналізувати й пропускати лише у відео не коротших за це значення. Типово: 180 секунд. 0 — будь-яка тривалість.'],
+            minSegmentLength: ['Мінімальна тривалість сегмента', 'Пропускати спонсорські, рекламні сегменти та збори коштів не коротші за це значення. Типово: 20 секунд. 0 — будь-яка тривалість.'],
             chatOpenDelay: ['Відкрити чат через', 'Затримка перед відкриттям чату з часовими мітками.'],
             closeDelay: ['Закрити чат через', 'Затримка після завершення відповіді ШІ перед закриттям чату.'],
             autoSkipDelay: ['Час показу кнопки скасування', 'Секунди для скасування перед пропусканням сегмента. Відлік зупиняється на паузі відео. Установіть 0, щоб вимкнути автопропуск.'],
@@ -41,10 +45,12 @@
             advanced: 'Дополнительные задержки', save: 'Сохранить', reset: 'Сбросить настройки',
             logs: 'Диагностика', export: 'Экспортировать журнал',
             debug: 'Отладочные сообщения', debugHint: 'Показывать диагностические сообщения в консоли браузера.',
-            saved: 'Сохранено. Новые таймеры будут использовать эти настройки.',
+            saved: 'Сохранено. Ограничения пропуска действуют сразу, задержки — для новых таймеров.',
             restored: 'Настройки по умолчанию восстановлены.', loadError: 'Не удалось загрузить настройки. Откройте это окно снова.',
             saveError: 'Не удалось сохранить настройки. Попробуйте ещё раз.',
             exported: 'Экспорт журнала запрошен.', exportError: 'Не удалось экспортировать журнал. Попробуйте ещё раз.',
+            minVideoLength: ['Минимальная длительность видео', 'Анализировать и пропускать только в видео не короче этого значения. По умолчанию: 180 секунд. 0 — любая длительность.'],
+            minSegmentLength: ['Минимальная длительность сегмента', 'Пропускать спонсорские, рекламные сегменты и сборы средств не короче этого значения. По умолчанию: 20 секунд. 0 — любая длительность.'],
             chatOpenDelay: ['Открыть чат через', 'Задержка перед открытием чата с временными метками.'],
             closeDelay: ['Закрыть чат через', 'Задержка после завершения ответа ИИ перед закрытием чата.'],
             autoSkipDelay: ['Время показа кнопки отмены', 'Секунды для отмены перед пропуском сегмента. Отсчёт останавливается на паузе видео. Установите 0, чтобы отключить автопропуск.'],
@@ -90,7 +96,7 @@
         input.required = true;
         input.setAttribute('aria-describedby', hint.id);
         row.append(text, input);
-        document.querySelector(['chatOpenDelay', 'closeDelay', 'autoSkipDelay'].includes(key)
+        document.querySelector(['minVideoLength', 'minSegmentLength', 'chatOpenDelay', 'closeDelay', 'autoSkipDelay'].includes(key)
             ? '#main-fields' : '#advanced-fields').append(row);
     }
 

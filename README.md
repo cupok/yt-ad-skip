@@ -70,6 +70,8 @@ page uses the browser's preferred supported language.
 
 | Setting | Purpose |
 | --- | --- |
+| Minimum video length | Only analyze and skip in videos at least this long; defaults to 180 seconds. `0` removes the limit. |
+| Minimum segment length | Only skip sponsor, ad, and fundraising segments at least this long; defaults to 20 seconds. `0` removes the limit. |
 | Open chat after | Delay before opening the timestamp chat. |
 | Close chat after | Delay after a new AI timestamp response settles; defaults to 5 seconds. Further response mutations restart it. |
 | Cancel button duration | Time to cancel before automatically skipping. `0` disables auto-skip and hides the button. |
@@ -78,8 +80,9 @@ page uses the browser's preferred supported language.
 
 Timing fields use whole seconds in the UI. Existing fractional values are rounded
 for display. Saved settings apply to open tabs; most existing timers finish with
-their original delay, while changing the auto-skip duration restarts a pending
-countdown. A response timeout leaves the chat open.
+their original delay. Length limits apply immediately to automatic and keyboard
+skipping; segment length uses the full range, clamped to the video end. Changing
+the auto-skip duration restarts a pending countdown. A response timeout leaves the chat open.
 
 ## Permissions and privacy
 

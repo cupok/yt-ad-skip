@@ -256,12 +256,77 @@ test('clicking cancel leaves the current segment playing and stops its countdown
 
 test('automatic seeking is clamped to the video duration', async () => {
     const h = setup();
+    h.extension.settings.minVideoLength = 0;
     h.player.duration = 50;
     h.extension.updateSkipButton(h.player);
     assert.equal(h.extension.button.textContent, 'Cancel auto-skip (5s)');
     await h.advance(5000);
     assert.equal(h.player.currentTime, 50);
 });
+
+for (const [length, eligible] of [[15, false], [19.999, false], [20, true], [21, true]]) {
+    test(`a ${length}-second segment ${eligible ? 'can' : 'cannot'} be skipped with a 20-second minimum`, async () => {
+        const h = setup();
+        h.extension.setSegments([{ start: 30, end: 30 + length }]);
+        h.player.currentTime = 31;
+        h.extension.updateSkipButton(h.player);
+        assert.equal(h.extension.button?.style.display === 'block', eligible);
+        await h.advance(5000);
+        assert.equal(h.player.currentTime, eligible ? 30 + length : 31);
+    });
+}
+
+test('segment minimum uses the full range rather than the remaining playback time', async () => {
+    const h = setup();
+    h.player.currentTime = 55;
+    h.extension.updateSkipButton(h.player);
+    await h.advance(5000);
+    assert.equal(h.player.currentTime, 60);
+});
+
+test('segment minimum uses the range clamped to the video end', async () => {
+    const h = setup();
+    h.player.duration = 600;
+    h.player.currentTime = 590;
+    h.extension.setSegments([{ start: 585, end: 630 }]);
+    h.extension.updateSkipButton(h.player);
+    assert.equal(h.timers.size, 0);
+    await h.advance(5000);
+    assert.equal(h.player.currentTime, 590);
+});
+
+test('zero length limits allow short videos and short segments', async () => {
+    const h = setup({ storedSettings: { minVideoLength: 0, minSegmentLength: 0 } });
+    await h.extension.loadSettings();
+    h.player.duration = 60;
+    h.extension.setSegments([{ start: 40, end: 50 }]);
+    h.extension.updateSkipButton(h.player);
+    await h.advance(5000);
+    assert.equal(h.player.currentTime, 50);
+});
+
+for (const key of ['minVideoLength', 'minSegmentLength']) {
+    test(`changing ${key} cancels an ineligible pending skip and can re-enable it`, async () => {
+        const h = setup();
+        h.extension.bindSettingsChanges();
+        h.extension.bindShortcuts();
+        h.extension.updateSkipButton(h.player);
+        const staleTick = [...h.timers.values()][0].callback;
+        h.changeSettings({ [key]: key === 'minVideoLength' ? 700000 : 31000 });
+        assert.equal(h.extension.button.style.display, 'none');
+        assert.equal(h.timers.size, 0);
+        const event = new h.Event('keydown', { altKey: true, code: 'ArrowRight', cancelable: true });
+        h.document.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, false);
+        staleTick();
+        await h.advance(10000);
+        assert.equal(h.player.currentTime, 45);
+        h.changeSettings({ [key]: 0 });
+        assert.equal(h.extension.button.style.display, 'block');
+        await h.advance(5000);
+        assert.equal(h.player.currentTime, 60);
+    });
+}
 
 test('cancel labels show the countdown rather than the segment end time', () => {
     const h = setup();

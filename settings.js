@@ -2,6 +2,8 @@
     // Preserve the storage key so existing settings survive the rename.
     const STORAGE_KEY = 'ytAutoTimestampsSettings';
     const FIELDS = Object.freeze({
+        minVideoLength: { default: 180000, min: 0, max: 604800000 },
+        minSegmentLength: { default: 20000, min: 0, max: 604800000 },
         chatOpenDelay: { default: 1000, min: 0, max: 600000 },
         closeDelay: { default: 5000, min: 0, max: 600000 },
         autoSkipDelay: { default: 5000, min: 0, max: 600000 },
@@ -18,13 +20,13 @@
     function normalize(value) {
         const input = value && typeof value === 'object' ? value : {};
 
-        const delays = Object.fromEntries(Object.entries(FIELDS).map(([key, field]) => {
+        const values = Object.fromEntries(Object.entries(FIELDS).map(([key, field]) => {
             const number = input[key];
             const valid = typeof number === 'number' && Number.isFinite(number)
                 && number >= field.min && number <= field.max;
             return [key, valid ? Math.round(number) : field.default];
         }));
-        return { ...delays, debug: typeof input.debug === 'boolean' ? input.debug : DEFAULTS.debug };
+        return { ...values, debug: typeof input.debug === 'boolean' ? input.debug : DEFAULTS.debug };
     }
 
     globalThis.YtAdSkipSettings = Object.freeze({ STORAGE_KEY, FIELDS, DEFAULTS, normalize });

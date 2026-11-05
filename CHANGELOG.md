@@ -9,6 +9,12 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]
 
+### Added
+
+- Adjustable minimum video and segment lengths in settings. Videos default to a
+  180-second minimum; sponsor, ad, and fundraising segments shorter than 20
+  seconds are left in playback. Set either limit to 0 to remove it.
+
 ## [1.0.1] - 2026-10-21
 
 ### Fixed

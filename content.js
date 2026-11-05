@@ -815,12 +815,14 @@ function closeChat(localRunId, reason) {
 }
 
 function findCurrentSegment(video) {
-    if (!(video instanceof HTMLMediaElement)) {
+    if (!(video instanceof HTMLMediaElement) || video.duration * 1000 < settings.minVideoLength) {
         return null;
     }
 
     return segments.find((item) => {
-        return video.currentTime >= item.start && video.currentTime < getSegmentEnd(item, video);
+        const end = getSegmentEnd(item, video);
+        return (end - item.start) * 1000 >= settings.minSegmentLength
+            && video.currentTime >= item.start && video.currentTime < end;
     }) || null;
 }
 
@@ -1014,7 +1016,7 @@ function getStartBlockReasons(video) {
 
     if (!Number.isFinite(video.duration)) {
         reasons.push(`duration-${video.duration}`);
-    } else if (video.duration < 180) {
+    } else if (video.duration * 1000 < settings.minVideoLength) {
         reasons.push(`duration-too-short-${Math.round(video.duration)}`);
     }
 
@@ -2097,15 +2099,15 @@ function bindSettingsChanges() {
         if (area !== 'local' || !Object.prototype.hasOwnProperty.call(changes, settingsApi.STORAGE_KEY)) {
             return;
         }
-        const previousAutoSkipDelay = settings.autoSkipDelay;
+        const previousSettings = settings;
         settings = settingsApi.normalize(changes[settingsApi.STORAGE_KEY].newValue);
         log('settings updated', settings);
 
-        if (previousAutoSkipDelay !== settings.autoSkipDelay) {
+        if (previousSettings.autoSkipDelay !== settings.autoSkipDelay) {
             cancelAutoSkip('settings-changed');
-            if (activePlayer && segments.length) {
-                updateSkipButton(activePlayer);
-            }
+        }
+        if (activePlayer && segments.length) {
+            updateSkipButton(activePlayer);
         }
     });
 }
