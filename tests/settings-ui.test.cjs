@@ -151,6 +151,39 @@ test('editing a value clears previous save status', () => {
     assert.equal(h.status.textContent, '');
 });
 
+for (const action of ['save', 'reset', 'error']) {
+    test(`${action} status disappears after three seconds`, async () => {
+        const h = loadSettingsUI(action === 'error' ? { saveError: 'quota exceeded' } : {});
+        if (action === 'reset') h.reset.click(); else h.submit();
+        const message = h.status.textContent;
+        assert.ok(message.length > 0);
+        await h.advance(2999);
+        assert.equal(h.status.textContent, message);
+        await h.advance(1);
+        assert.equal(h.status.textContent, '');
+    });
+}
+
+test('a new notice gets a full three seconds even when the previous notice is about to expire', async () => {
+    const h = loadSettingsUI();
+    h.submit();
+    await h.advance(2000);
+    h.reset.click();
+    await h.advance(1000);
+    assert.equal(h.status.textContent, 'Default settings restored.');
+    await h.advance(2000);
+    assert.equal(h.status.textContent, '');
+});
+
+test('editing clears the notice and its pending dismissal timer', () => {
+    const h = loadSettingsUI();
+    h.submit();
+    assert.equal(h.timers.size, 1);
+    h.form.dispatchEvent(new h.Event('input'));
+    assert.equal(h.status.textContent, '');
+    assert.equal(h.timers.size, 0);
+});
+
 test('opening settings does not export logs and export waits for an explicit click', () => {
     const h = loadSettingsUI();
     assert.equal(h.messages.length, 0);

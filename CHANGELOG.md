@@ -9,6 +9,13 @@ history. Development changes stay under `Unreleased` until release preparation.
 
 ## [Unreleased]
 
+### Changed
+
+- Save settings and Reset defaults stay visible in a fixed bottom bar. Debug
+  logging, troubleshooting, and log export are grouped in a Debug settings accordion.
+- Status notices float above the buttons and disappear after three seconds,
+  keeping the bottom bar compact.
+
 ### Added
 
 - Adjustable minimum video and segment lengths in settings. Videos default to a

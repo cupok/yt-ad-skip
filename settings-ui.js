@@ -5,9 +5,9 @@
         en: {
             title: 'Settings', intro: 'Adjust the timing. All values are in seconds.',
             advanced: 'Advanced timing', save: 'Save settings', reset: 'Reset defaults',
-            logs: 'Troubleshooting', export: 'Export logs',
+            debugSection: 'Debug settings', logs: 'Troubleshooting', export: 'Export logs',
             debug: 'Debug logging', debugHint: 'Show diagnostic messages in the browser console.',
-            saved: 'Saved. Skip limits apply now; new timers use these settings.',
+            saved: 'Saved.',
             restored: 'Default settings restored.', loadError: 'Could not load settings. Reopen this window to try again.',
             saveError: 'Could not save settings. Please try again.',
             exported: 'Log export requested.', exportError: 'Could not export logs. Please try again.',
@@ -24,9 +24,9 @@
         uk: {
             title: 'Налаштування', intro: 'Налаштуйте затримки. Усі значення в секундах.',
             advanced: 'Додаткові затримки', save: 'Зберегти', reset: 'Відновити типові',
-            logs: 'Діагностика', export: 'Експортувати журнал',
+            debugSection: 'Налаштування налагодження', logs: 'Діагностика', export: 'Експортувати журнал',
             debug: 'Налагоджувальні повідомлення', debugHint: 'Показувати діагностичні повідомлення в консолі браузера.',
-            saved: 'Збережено. Обмеження пропуску діють одразу, затримки — для нових таймерів.',
+            saved: 'Збережено.',
             restored: 'Типові налаштування відновлено.', loadError: 'Не вдалося завантажити налаштування. Відкрийте це вікно знову.',
             saveError: 'Не вдалося зберегти налаштування. Спробуйте ще раз.',
             exported: 'Експорт журналу запитано.', exportError: 'Не вдалося експортувати журнал. Спробуйте ще раз.',
@@ -43,9 +43,9 @@
         ru: {
             title: 'Настройки', intro: 'Настройте задержки. Все значения в секундах.',
             advanced: 'Дополнительные задержки', save: 'Сохранить', reset: 'Сбросить настройки',
-            logs: 'Диагностика', export: 'Экспортировать журнал',
+            debugSection: 'Настройки отладки', logs: 'Диагностика', export: 'Экспортировать журнал',
             debug: 'Отладочные сообщения', debugHint: 'Показывать диагностические сообщения в консоли браузера.',
-            saved: 'Сохранено. Ограничения пропуска действуют сразу, задержки — для новых таймеров.',
+            saved: 'Сохранено.',
             restored: 'Настройки по умолчанию восстановлены.', loadError: 'Не удалось загрузить настройки. Откройте это окно снова.',
             saveError: 'Не удалось сохранить настройки. Попробуйте ещё раз.',
             exported: 'Экспорт журнала запрошен.', exportError: 'Не удалось экспортировать журнал. Попробуйте ещё раз.',
@@ -100,9 +100,17 @@
             ? '#main-fields' : '#advanced-fields').append(row);
     }
 
+    let statusTimer;
+
     function showStatus(message, error = false) {
+        clearTimeout(statusTimer);
         status.textContent = message;
         status.dataset.error = String(error);
+        if (message) {
+            statusTimer = setTimeout(() => {
+                status.textContent = '';
+            }, 3000);
+        }
     }
 
     function populate(values) {

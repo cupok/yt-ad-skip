@@ -1,13 +1,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { createDOM } = require('./browser.cjs');
+const { createDOM, createClock } = require('./browser.cjs');
 
 const root = path.join(__dirname, '..', '..');
 
 function loadSettingsUI({ languages = ['en'], language = '', stored = {}, loadError,
     saveError, deferLoad = false, deferSave = false } = {}) {
     const dom = createDOM();
+    const clock = createClock();
     const { document, HTMLElement } = dom;
     const form = new HTMLElement('form');
     const fields = new HTMLElement('fieldset');
@@ -73,12 +74,12 @@ function loadSettingsUI({ languages = ['en'], language = '', stored = {}, loadEr
         chrome.runtime.lastError = error && { message: error };
         try { callback(); } finally { delete chrome.runtime.lastError; }
     }
-    const context = vm.createContext({ ...dom, navigator: { languages, language }, chrome });
+    const context = vm.createContext({ ...dom, ...clock, navigator: { languages, language }, chrome });
     for (const file of ['settings.js', 'settings-ui.js']) {
         const filename = path.join(root, file);
         vm.runInContext(fs.readFileSync(filename, 'utf8'), context, { filename });
     }
-    return { ...dom, form, fields, mainFields, advanced, advancedFields, reset, status, exportButton,
+    return { ...dom, ...clock, form, fields, mainFields, advanced, advancedFields, reset, status, exportButton,
         writes, messages, storage, settings: context.YtAdSkipSettings,
         input: key => form.elements.namedItem(key),
         submit() { const event = new dom.Event('submit', { cancelable: true }); form.dispatchEvent(event); return event; },
